@@ -8,9 +8,10 @@ module Language.Landler (
         step, dance,
 
         -- * Utilities
-        subst
+        subst, freeVariables, boundVariables
     ) where
 
+import qualified Data.Set as S
 import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
 
@@ -26,14 +27,14 @@ data Term = Var Var | Ab Var Term | App Term Term
 
 instance Show Term where
     show (Var v)   = v
-    show (Ab v t)  = "(\\" ^-^ v ^-^ ". " ^-^ t ^-^ ")"
-    show (App t p) = "" ^-^ t ^-^ " " ^-^ p
-
--- | Perform a one-step call-by-name reduction.  Return 'Nothing' if
--- the term is stuck.
-step :: Term -> Maybe Term
-step (App (Ab x m) n) = Just $ subst m x n
-step _                = Nothing
+    show (Ab v t)  = "\\" ^-^ v ^-^ showAb t
+        where
+          showAb (Ab v' t') = " " ^-^ v' ^-^ showAb t'
+          showAb t'         = ". " ^-^ t'
+    show (App t p) = showP t ^-^ " " ^-^ showP p
+        where
+          showP (Var x) = x
+          showP q       = "(" ^-^ q ^-^ ")"
 
 -- | Perform a many-step reduction by calling 'step'
 -- repeatedly. Return all the intermediary results (including the
@@ -42,6 +43,12 @@ dance :: Term -> [Term]
 dance t = case step t of
             Nothing -> [t]
             Just t' -> t : dance t'
+
+-- | Perform a one-step call-by-name reduction.  Return 'Nothing' if
+-- the term is stuck.
+step :: Term -> Maybe Term
+step (App (Ab x m) n) = Just $ subst m x n
+step _                = Nothing
 
 -- | Return the substitution in M of the variable X by the term N.
 subst :: Term   -- ^ M: The term in which to perform the substitution
@@ -54,5 +61,32 @@ subst t@(Var y) x n
 subst (App m1 m2) x n =
     App (subst m1 x n) (subst m2 x n)
 subst t@(Ab y m) x n
-    | x == y    = t
-    | otherwise = Ab y (subst m x n)
+    | x == y           = t
+    | y `S.member` fvn = let z = newVar usedVariables
+                         in subst (Ab z (subst m y (Var z))) x n
+    | otherwise        = Ab y (subst m x n)
+    where
+      fvn = freeVariables n
+      usedVariables = S.unions [ fvn, freeVariables n, boundVariables m
+                               , boundVariables n ]
+
+-- | Return the set of free variables in the given term.
+freeVariables :: Term -> S.Set Var
+freeVariables (Var x)     = S.singleton x
+freeVariables (App m1 m2) = freeVariables m1 `S.union` freeVariables m2
+freeVariables (Ab y m)    = y `S.delete` freeVariables m
+
+-- | Return the set of bound variables in the given term.
+boundVariables :: Term -> S.Set Var
+boundVariables (Var _)     = S.empty
+boundVariables (App m1 m2) = boundVariables m1 `S.union` boundVariables m2
+boundVariables (Ab y m)    = y `S.insert` boundVariables m
+
+-- | A lot of variable names.
+allVars :: [Var]
+allVars = let vs = "" : [v ++ [s] | v <- vs, s <- ['a'..'z']]
+          in tail vs
+
+-- | Return a variable name not found in the given set.
+newVar :: S.Set Var -> Var
+newVar usedVariables = head $ dropWhile (flip S.member usedVariables) allVars
