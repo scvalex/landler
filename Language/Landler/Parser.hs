@@ -2,7 +2,7 @@
 
 module Language.Landler.Parser (
         Term(..), Var,
-        parseLambda
+        parseTerm
     ) where
 
 import Control.Applicative ( (<$>), (*>), (<*>) )
@@ -42,10 +42,10 @@ instance Show Term where
 -- Parser
 ----------------------------------------------------------------------
 
-parseLambda :: String -> Term
-parseLambda text = case parse term "input" text of
-                     Left err -> error (show err)
-                     Right t  -> t
+parseTerm :: String -> Term
+parseTerm text = case parse term "input" text of
+                   Left err -> error (show err)
+                   Right t  -> t
 
 term :: LParser Term
 term = do

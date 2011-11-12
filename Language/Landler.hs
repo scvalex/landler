@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances #-}
 
 module Language.Landler (
         -- * Types
@@ -8,25 +8,38 @@ module Language.Landler (
         step, dance,
 
         -- * Utilities
-        subst, freeVariables, boundVariables, parseLambda
+        subst, freeVariables, boundVariables
     ) where
 
 import Language.Landler.Parser
 import qualified Data.Set as S
 
+-- | Type-class for things that can be turned into 'Term's.
+class ReadTerm t where
+    toTerm :: t -> Term
+
+instance ReadTerm Term where
+    toTerm = id
+
+instance ReadTerm String where
+    toTerm = parseTerm
+
 -- | Perform a many-step reduction by calling 'step'
 -- repeatedly. Return all the intermediary results (including the
 -- original term).
-dance :: Term -> [Term]
-dance t = case step t of
-            Nothing -> [t]
-            Just t' -> t : dance t'
+dance :: (ReadTerm t) => t -> [Term]
+dance rt = let t = toTerm rt
+           in case step t of
+                Nothing -> [t]
+                Just t' -> t : dance t'
 
 -- | Perform a one-step call-by-name reduction.  Return 'Nothing' if
 -- the term is stuck.
-step :: Term -> Maybe Term
-step (App (Ab x m) n) = Just $ subst m x n
-step _                = Nothing
+step :: (ReadTerm t) => t -> Maybe Term
+step = step' . toTerm
+    where
+      step' (App (Ab x m) n) = Just $ subst m x n
+      step' _                = Nothing
 
 -- | Return the substitution in M of the variable X by the term N.
 subst :: Term   -- ^ M: The term in which to perform the substitution
