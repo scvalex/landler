@@ -6,9 +6,10 @@ module Language.Landler.Parser (
     ) where
 
 import Control.Applicative ( (<$>), (*>), (<*>) )
+import Data.Functor.Identity ( Identity )
 import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
-import Text.Parsec ( Parsec, parse, oneOf, many, many1, (<|>) )
+import Text.Parsec ( ParsecT, parse, oneOf, many, many1, (<|>) )
 import Text.Parsec.Language ( emptyDef )
 import Text.Parsec.Token ( GenLanguageDef(..), LanguageDef
                          , GenTokenParser(..), makeTokenParser )
@@ -73,7 +74,7 @@ var = Var <$> lvar
 -- Lexer
 ----------------------------------------------------------------------
 
-type LParser a = Parsec String () a
+type LParser a = ParsecT String () Identity a
 
 lambdaCalculusDef :: LanguageDef st
 lambdaCalculusDef = emptyDef { commentLine = "#"
@@ -81,19 +82,17 @@ lambdaCalculusDef = emptyDef { commentLine = "#"
                              , opLetter = oneOf ".\\"
                              , reservedOpNames = [".", "\\"] }
 
-lvar :: LParser String
-lop :: String -> LParser ()
-lparens :: LParser a -> LParser a
-skipws :: LParser ()
+lexer :: GenTokenParser String u Identity
+lexer = makeTokenParser lambdaCalculusDef
 
-TokenParser { identifier = lvar
-            , reservedOp = lop
-            , parens = lparens
-            , whiteSpace = skipws
-            } = makeTokenParser lambdaCalculusDef
+lvar :: LParser String
+lvar = identifier lexer
+
+lparens :: LParser a -> LParser a
+lparens = parens lexer
 
 ldot :: LParser ()
-ldot = lop "."
+ldot = (reservedOp lexer) "."
 
 llambda :: LParser ()
-llambda = lop "\\"
+llambda = (reservedOp lexer) "\\"
