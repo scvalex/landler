@@ -12,8 +12,6 @@ import Text.Parsec.Language ( emptyDef )
 import Text.Parsec.Token ( GenLanguageDef(..), LanguageDef
                          , GenTokenParser(..), makeTokenParser )
 
-import Debug.Trace ( trace )
-
 ----------------------------------------------------------------------
 -- Types
 ----------------------------------------------------------------------
@@ -44,24 +42,24 @@ instance Show Term where
 ----------------------------------------------------------------------
 
 parseLambda :: String -> Term
-parseLambda text = case parse top "input" text of
+parseLambda text = case parse term "input" text of
                      Left err -> error (show err)
                      Right t  -> t
 
-top :: LParser Term
-top = do
-  ms <- many terms
-  return (foldl1 App (concat ms))
+term :: LParser Term
+term = do
+  ts <- return . concat =<< many1 terms
+  return $ case ts of
+             [t] -> t
+             _   -> foldl1 App ts
 
 terms :: LParser [Term]
 terms = pterms <|> terms'
     where
       pterms :: LParser [Term]
       pterms = lparens $ do
-        ts <- return . concat =<< many terms
-        return $ case ts of
-                   [t] -> [t]
-                   _   -> [foldl1 App ts]
+                 t <- term
+                 return [t]
       terms' = do
         m <- ab <|> var
         ns <- many terms
@@ -69,18 +67,15 @@ terms = pterms <|> terms'
 
 ab :: LParser Term
 ab = do
-  trace "ab" (return ())
   llambda
   v <- lvar
   ldot
-  t <- top
+  t <- term
   return (Ab v t)
 
 var :: LParser Term
 var = do
-  trace "var" (return ())
   v <- lvar
-  trace "vardone" (return ())
   return (Var v)
 
 ----------------------------------------------------------------------
