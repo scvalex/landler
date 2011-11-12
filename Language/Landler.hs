@@ -2,7 +2,7 @@
 
 module Language.Landler (
         -- * Types
-        Term(..), Var,
+        Term(..), ReadTerm(..), Var,
 
         -- * Reductions
         step, dance,
