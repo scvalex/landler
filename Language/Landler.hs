@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Language.Landler (
         -- * Types
@@ -8,33 +8,11 @@ module Language.Landler (
         step, dance,
 
         -- * Utilities
-        subst, freeVariables, boundVariables
+        subst, freeVariables, boundVariables, parseLambda
     ) where
 
+import Language.Landler.Parser
 import qualified Data.Set as S
-import Data.Typeable ( Typeable )
-import Text.Interpol ( (^-^) )
-
--- | Lambda-calculus variable names follow the same rules as Haskell
--- identifiers.  Basically, the first character must be a letter or
--- @_@ and subesequent characters may be letters, numbers and @_@.
-type Var = String
-
--- | Lambda-calculus terms are variables, abstractions or
--- applications.
-data Term = Var Var | Ab Var Term | App Term Term
-          deriving ( Eq, Typeable )
-
-instance Show Term where
-    show (Var v)   = v
-    show (Ab v t)  = "\\" ^-^ v ^-^ showAb t
-        where
-          showAb (Ab v' t') = " " ^-^ v' ^-^ showAb t'
-          showAb t'         = ". " ^-^ t'
-    show (App t p) = showP t ^-^ " " ^-^ showP p
-        where
-          showP (Var x) = x
-          showP q       = "(" ^-^ q ^-^ ")"
 
 -- | Perform a many-step reduction by calling 'step'
 -- repeatedly. Return all the intermediary results (including the
