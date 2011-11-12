@@ -5,6 +5,7 @@ module Language.Landler.Parser (
         parseLambda
     ) where
 
+import Control.Applicative ( (<$>), (*>), (<*>) )
 import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
 import Text.Parsec ( Parsec, parse, oneOf, many, many1, (<|>) )
@@ -56,27 +57,17 @@ term = do
 terms :: LParser [Term]
 terms = pterms <|> terms'
     where
-      pterms :: LParser [Term]
-      pterms = lparens $ do
-                 t <- term
-                 return [t]
+      pterms = lparens $ (:[]) <$> term
       terms' = do
         m <- ab <|> var
         ns <- many terms
         return (m:concat ns)
 
 ab :: LParser Term
-ab = do
-  llambda
-  v <- lvar
-  ldot
-  t <- term
-  return (Ab v t)
+ab = Ab <$> (llambda *> lvar) <*> (ldot *> term)
 
 var :: LParser Term
-var = do
-  v <- lvar
-  return (Var v)
+var = Var <$> lvar
 
 ----------------------------------------------------------------------
 -- Lexer
