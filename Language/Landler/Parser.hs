@@ -9,7 +9,7 @@ import Control.Applicative ( (<$>), (*>), (<*>) )
 import Data.Functor.Identity ( Identity )
 import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
-import Text.Parsec ( ParsecT, parse, oneOf, many, many1, (<|>) )
+import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>) )
 import Text.Parsec.Language ( emptyDef )
 import Text.Parsec.Token ( GenLanguageDef(..), LanguageDef
                          , GenTokenParser(..), makeTokenParser )
@@ -65,7 +65,14 @@ terms = pterms <|> terms'
         return (m:concat ns)
 
 ab :: LParser Term
-ab = Ab <$> (llambda *> lvar) <*> (ldot *> term)
+ab = do
+  llambda
+  vs <- varlist
+  t <- term
+  return (foldl (flip Ab) t (reverse vs))
+
+varlist :: LParser [String]
+varlist = manyTill lvar ldot
 
 var :: LParser Term
 var = Var <$> lvar

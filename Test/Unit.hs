@@ -16,15 +16,22 @@ main = do
 
 parseTests :: Test
 parseTests =
-    test [ "var" ~: parseTest "x" (Var "x")
-         , "ab" ~: parseTest "\\x.x" (Ab "x" (Var "x"))
-         , "app" ~: parseTest "x y" (App (Var "x") (Var "y"))
-         , "app2" ~: parseTest "x y z" (App (App (Var "x") (Var "y")) (Var "z"))
-         , "ab-app" ~: parseTest "\\x. yy zz" (Ab "x" (App (Var "yy") (Var "zz")))
+    test [ "var" ~: parseTest "x" (v "x")
+         , "ab" ~: parseTest "\\x.x" (Ab "x" (v "x"))
+         , "app" ~: parseTest "x y" (App (v "x") (v "y"))
+         , "app2" ~: parseTest "x y z" (App (App (v "x") (v "y")) (v "z"))
+         , "ab-app" ~: parseTest "\\x. yy zz" (Ab "x" (App (v "yy") (v "zz")))
          , "ab2" ~: parseTest "\\x. \\y. x y"
-                              (Ab "x" (Ab "y" (App (Var "x") (Var "y"))))
-         , "ab3" ~: parseTest "\\x y. x y" (Ab "x" (Ab "y" (App (Var "x") (Var "y"))))
+                              (Ab "x" (Ab "y" (App (v "x") (v "y"))))
+         , "ab3" ~: parseTest "\\x y. x y"
+                              (Ab "x" (Ab "y" (App (v "x") (v "y"))))
+         , "ab4" ~: parseTest "\\x y z. z y x"
+                              (Ab "x" (Ab "y" (Ab "z"
+                                (App (App (v "z") (v "y")) (v "x")))))
          ]
 
 parseTest :: String -> Term -> Test
-parseTest text term = TestCase $ assertEqual "" (toTerm text) term
+parseTest text term = TestCase $ assertEqual "" term (toTerm text)
+
+v :: String -> Term
+v x = Var x
