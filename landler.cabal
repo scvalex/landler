@@ -15,7 +15,9 @@ Description:
         You may use either the library or the interpreter
         directly. See the README.md file for details.
 
-Extra-source-files:     Makefile
+Extra-source-files:     Makefile,
+                        Text/Unit.hs,
+                        Test/QC.hs
 
 Data-files:             README.md
 
