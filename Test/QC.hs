@@ -7,8 +7,7 @@ import Language.Landler
 import Test.QuickCheck
 
 instance Arbitrary Term where
-  -- Maximum depth: 7
-  arbitrary = choose (0, 7) >>= go
+  arbitrary = choose (1, 9) >>= go
     where
       go :: Int -> Gen Term
       go 0 = Var <$> name
@@ -29,5 +28,9 @@ instance Arbitrary Term where
 main :: IO ()
 main = mapM_ quickCheck [prop_IdemParseShow]
 
-prop_IdemParseShow :: Term -> Bool
-prop_IdemParseShow x = x == toTerm (show x)
+prop_IdemParseShow :: Term -> Property
+prop_IdemParseShow x = not (isVar x) ==> x == toTerm (show x)
+    where
+      isVar :: Term -> Bool
+      isVar (Var _) = True
+      isVar _       = False
