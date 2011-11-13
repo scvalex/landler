@@ -28,6 +28,10 @@ parseTests =
          , "ab4" ~: parseTest "\\x y z. z y x"
                               (Ab "x" (Ab "y" (Ab "z"
                                 (App (App (v "z") (v "y")) (v "x")))))
+         , "app-ab" ~: parseTest "(\\x . x) \\x . x"
+                                 (App (Ab "x" (v "x")) (Ab "x" (v "x")))
+         , "prec" ~: parseTest "\\x. y \\z. y"
+                               (Ab "x" (App (Var "y") (Ab "z" (Var "y"))))
          ]
 
 parseTest :: String -> Term -> Test
