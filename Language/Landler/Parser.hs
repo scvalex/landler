@@ -2,15 +2,16 @@
 
 module Language.Landler.Parser (
         Term(..), Var,
-        parseTerm
+        parseTerm, parseFile
     ) where
 
-import Control.Applicative ( (<$>), (*>), (<*>) )
+import Control.Applicative ( (<$>) )
 import Data.Functor.Identity ( Identity )
 import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
 import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>) )
 import Text.Parsec.Language ( emptyDef )
+import Text.Parsec.String ( parseFromFile )
 import Text.Parsec.Token ( GenLanguageDef(..), LanguageDef
                          , GenTokenParser(..), makeTokenParser )
 
@@ -42,6 +43,13 @@ instance Show Term where
 ----------------------------------------------------------------------
 -- Parser
 ----------------------------------------------------------------------
+
+parseFile :: FilePath -> IO Term
+parseFile fn = do
+  res <- parseFromFile term fn
+  case res of
+    Left err -> error (show err)
+    Right t  -> return t
 
 parseTerm :: String -> Term
 parseTerm text = case parse term "input" text of

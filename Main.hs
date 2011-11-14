@@ -1,4 +1,9 @@
 module Main where
 
+import Language.Landler.Parser ( parseFile )
+import System.Environment ( getArgs )
+
 main :: IO ()
-main = putStrLn "Ok"
+main = do
+  [fn] <- getArgs
+  print =<< parseFile fn
