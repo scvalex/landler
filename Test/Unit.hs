@@ -36,6 +36,13 @@ parseTests =
          , "call2" ~: parseTestS "(\\x. y \\z. y)"
                                  (Call (Ab "x" (App (Var "y")
                                                     (Ab "z" (Var "y")))))
+         , "let" ~: parseTestS "let id = (\\x. x)"
+                                (Let "id" (Ab "x" (Var "x")))
+         , "let2" ~: parseTestS "let meh = (\\x y z. z y x)"
+                                (Let "meh"
+                                     (Ab "x" (Ab "y" (Ab "z"
+                                         (App (App (v "z") (v "y"))
+                                              (v "x"))))))
          ]
 
 parseTest :: String -> Term -> Test
