@@ -32,10 +32,18 @@ parseTests =
                                  (App (Ab "x" (v "x")) (Ab "x" (v "x")))
          , "prec" ~: parseTest "\\x. y \\z. y"
                                (Ab "x" (App (Var "y") (Ab "z" (Var "y"))))
+         , "call" ~: parseTestS "(\\x. y)" (Call (Ab "x" (Var "y")))
+         , "call2" ~: parseTestS "(\\x. y \\z. y)"
+                                 (Call (Ab "x" (App (Var "y")
+                                                    (Ab "z" (Var "y")))))
          ]
 
 parseTest :: String -> Term -> Test
 parseTest text term = TestCase $ assertEqual "" term (toTerm text)
+
+parseTestS :: String -> Statement -> Test
+parseTestS text statement =
+    TestCase $ assertEqual "" statement (parseStatement text)
 
 v :: String -> Term
 v x = Var x

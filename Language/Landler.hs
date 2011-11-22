@@ -2,7 +2,10 @@
 
 module Language.Landler (
         -- * Types
-        Term(..), ReadTerm(..), Var,
+        Statement(..), Term(..), Var,
+
+        -- * Reading
+        parseProgram, parseStatement, ReadTerm(..),
 
         -- * Reductions
         step, dance,

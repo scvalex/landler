@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Language.Landler.Parser (
-        Term(..), Var,
-        parseStatement, parseTerm, parseFile
+        Statement(..), Term(..), Var,
+        parseFile, parseProgram, parseStatement, parseTerm
     ) where
 
 import Control.Applicative ( (<$>), (*>), (<*>) )
@@ -28,6 +28,7 @@ type Var = String
 -- prints out the result.  These are meta-syntactic constructs; they
 -- are not part of the lambda-calculus.
 data Statement = Let Var Term | Call Term
+                 deriving ( Eq )
 
 instance Show Statement where
     show (Let v t) = "let " ^-^ v ^-^ " = (" ^-^ t ^-^ ")"
@@ -36,6 +37,7 @@ instance Show Statement where
 -- | Lambda-calculus terms are variables, abstractions or
 -- applications.
 data Term = Var Var | Ab Var Term | App Term Term
+            deriving ( Eq )
 
 instance Show Term where
     show (Var v)   = v
@@ -54,10 +56,15 @@ instance Show Term where
 
 parseFile :: FilePath -> IO [Statement]
 parseFile fn = do
-  res <- parseFromFile (many1 statement) fn
+  res <- parseFromFile program fn
   case res of
     Left err  -> error (show err)
     Right sts -> return sts
+
+parseProgram :: String -> [Statement]
+parseProgram text = case parse program "input" text of
+                      Left err -> error (show err)
+                      Right t  -> t
 
 parseStatement :: String -> Statement
 parseStatement text = case parse statement "input" text of
@@ -68,6 +75,9 @@ parseTerm :: String -> Term
 parseTerm text = case parse term "input" text of
                    Left err -> error (show err)
                    Right t  -> t
+
+program :: LParser [Statement]
+program = many1 statement
 
 statement :: LParser Statement
 statement = letS <|> callS
