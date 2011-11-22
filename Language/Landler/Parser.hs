@@ -2,12 +2,11 @@
 
 module Language.Landler.Parser (
         Term(..), Var,
-        parseTerm, parseFile
+        parseStatement, parseTerm, parseFile
     ) where
 
-import Control.Applicative ( (<$>) )
+import Control.Applicative ( (<$>), (*>), (<*>) )
 import Data.Functor.Identity ( Identity )
-import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
 import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>) )
 import Text.Parsec.Language ( emptyDef )
@@ -24,10 +23,19 @@ import Text.Parsec.Token ( GenLanguageDef(..), LanguageDef
 -- @_@ and subesequent characters may be letters, numbers and @_@.
 type Var = String
 
+-- | Statements are either @let <var> = (<term>)@ which binds the term
+-- to the variable name or @(<term>)@ which evaluates the term and
+-- prints out the result.  These are meta-syntactic constructs; they
+-- are not part of the lambda-calculus.
+data Statement = Let Var Term | Call Term
+
+instance Show Statement where
+    show (Let v t) = "let " ^-^ v ^-^ " = (" ^-^ t ^-^ ")"
+    show (Call t)  = "(" ^-^ t ^-^ ")"
+
 -- | Lambda-calculus terms are variables, abstractions or
 -- applications.
 data Term = Var Var | Ab Var Term | App Term Term
-          deriving ( Eq, Typeable )
 
 instance Show Term where
     show (Var v)   = v
@@ -44,17 +52,31 @@ instance Show Term where
 -- Parser
 ----------------------------------------------------------------------
 
-parseFile :: FilePath -> IO Term
+parseFile :: FilePath -> IO [Statement]
 parseFile fn = do
-  res <- parseFromFile term fn
+  res <- parseFromFile (many1 statement) fn
   case res of
-    Left err -> error (show err)
-    Right t  -> return t
+    Left err  -> error (show err)
+    Right sts -> return sts
+
+parseStatement :: String -> Statement
+parseStatement text = case parse statement "input" text of
+                        Left err -> error (show err)
+                        Right t  -> t
 
 parseTerm :: String -> Term
 parseTerm text = case parse term "input" text of
                    Left err -> error (show err)
                    Right t  -> t
+
+statement :: LParser Statement
+statement = letS <|> callS
+    where
+      letS :: LParser Statement
+      letS = Let <$> (llet *> lvar) <*> (leq *> lparens term)
+
+      callS :: LParser Statement
+      callS = Call <$> lparens term
 
 term :: LParser Term
 term = do
@@ -94,8 +116,8 @@ type LParser a = ParsecT String () Identity a
 lambdaCalculusDef :: LanguageDef st
 lambdaCalculusDef = emptyDef { commentLine = "#"
                              , opStart = opLetter lambdaCalculusDef
-                             , opLetter = oneOf ".\\"
-                             , reservedOpNames = [".", "\\"] }
+                             , opLetter = oneOf ".\\="
+                             , reservedOpNames = [".", "\\", "=", "let"] }
 
 lexer :: GenTokenParser String u Identity
 lexer = makeTokenParser lambdaCalculusDef
@@ -111,3 +133,9 @@ ldot = (reservedOp lexer) "."
 
 llambda :: LParser ()
 llambda = (reservedOp lexer) "\\"
+
+llet :: LParser ()
+llet = (reserved lexer) "let"
+
+leq :: LParser ()
+leq = (reservedOp lexer) "="
