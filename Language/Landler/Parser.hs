@@ -57,24 +57,21 @@ instance Show Term where
 parseFile :: FilePath -> IO [Statement]
 parseFile fn = do
   res <- parseFromFile program fn
-  case res of
-    Left err  -> error (show err)
-    Right sts -> return sts
+  return $ handleResult res
 
 parseProgram :: String -> [Statement]
-parseProgram text = case parse program "input" text of
-                      Left err -> error (show err)
-                      Right t  -> t
+parseProgram text = handleResult (parse program "input" text)
 
 parseStatement :: String -> Statement
-parseStatement text = case parse statement "input" text of
-                        Left err -> error (show err)
-                        Right t  -> t
+parseStatement text = handleResult (parse statement "input" text)
 
 parseTerm :: String -> Term
-parseTerm text = case parse term "input" text of
-                   Left err -> error (show err)
-                   Right t  -> t
+parseTerm text = handleResult (parse term "input" text)
+
+handleResult :: Show a => Either a t -> t
+handleResult res = case res of
+                     Left err -> error (show err)
+                     Right t  -> t
 
 program :: LParser [Statement]
 program = many1 statement
@@ -138,14 +135,8 @@ lvar = identifier lexer
 lparens :: LParser a -> LParser a
 lparens = parens lexer
 
-ldot :: LParser ()
+ldot, llambda, llet, leq :: LParser ()
 ldot = (reservedOp lexer) "."
-
-llambda :: LParser ()
 llambda = (reservedOp lexer) "\\"
-
-llet :: LParser ()
 llet = (reserved lexer) "let"
-
-leq :: LParser ()
 leq = (reservedOp lexer) "="
