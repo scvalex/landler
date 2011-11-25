@@ -6,7 +6,7 @@ landler
 A λ-calculus interpreter
 ------------------------
 
-At its core, landler is a λ-calculus evaluation library and an
+At its core, landler is a λ-calculus evaluation library and a
 command-line program that wraps around it.  For instance, you can use
 the library interactively with GHCi:
 
@@ -22,8 +22,8 @@ the library and includes some extra features such as let-bindings:
     % cat > fix.lambda
     let id = (\x. x)
     let fix = (\f. (\x. f (x x)) (\x. f (x x)))
-
     (fix id)
+
     % landler fix.lambda
     fix id
 	    name-rep
