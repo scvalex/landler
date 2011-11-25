@@ -5,7 +5,7 @@ all: build
 build: dist/setup-config
 	cabal build
 
-test: build
+test: install
 	runhaskell Test/Unit.hs
 	runhaskell Test/QC.hs
 
