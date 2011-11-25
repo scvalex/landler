@@ -44,14 +44,7 @@ breakDance binds rt = let t = toTerm rt
 -- | Perform a many-step reduction by calling 'step' repeatedly.
 -- Return all the intermediary results (including the original term).
 dance :: (ReadTerm t) => t -> [(Term, String)]
-dance rt = let t = toTerm rt
-           in go [t] t
-    where
-      go soFar t = case step t of
-                     Left s        -> [(t, s)]
-                     Right (t', s)
-                         | t' `elem` soFar -> [(t, s), (t', "cycling")]
-                         | otherwise       -> (t, s) : go (t' : soFar) t'
+dance = breakDance []
 
 -- | Perform a one-step call-by-name reduction with bindings.  Return
 -- 'Nothing if the term is stuck.
