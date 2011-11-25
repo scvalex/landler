@@ -8,7 +8,7 @@ module Language.Landler (
         parseProgram, parseStatement, ReadTerm(..),
 
         -- * Reductions
-        step, dance,
+        breakDance, dance, sideStep, step,
 
         -- * Utilities
         subst, freeVariables, boundVariables
@@ -27,14 +27,32 @@ instance ReadTerm Term where
 instance ReadTerm String where
     toTerm = parseTerm
 
--- | Perform a many-step reduction by calling 'step'
--- repeatedly. Return all the intermediary results (including the
--- original term).
+-- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
+-- all intermediary results (including the original term).  This is
+-- effectively a version of 'dance' that also uses bound names.
+breakDance :: (ReadTerm t) => [(Var, Term)] -> t -> [Term]
+breakDance binds rt = let t = toTerm rt
+                      in case sideStep binds t of
+                           Nothing -> [t]
+                           Just t' -> t : breakDance binds t'
+
+-- | Perform a many-step reduction by calling 'step' repeatedly.
+-- Return all the intermediary results (including the original term).
 dance :: (ReadTerm t) => t -> [Term]
 dance rt = let t = toTerm rt
            in case step t of
                 Nothing -> [t]
                 Just t' -> t : dance t'
+
+-- | Perform a one-step call-by-name reduction with bindings.  Return
+-- 'Nothing if the term is stuck.
+sideStep :: (ReadTerm t) => [(Var, Term)] -> t -> Maybe Term
+sideStep binds = sideStep' . toTerm
+    where
+      sideStep' (App (Var x) n) = case x `lookup` binds of
+                                   Nothing -> Nothing
+                                   Just m  -> Just $ App m n
+      sideStep' t               = step t
 
 -- | Perform a one-step call-by-name reduction.  Return 'Nothing' if
 -- the term is stuck.
