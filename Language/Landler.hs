@@ -30,37 +30,37 @@ instance ReadTerm String where
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
 -- effectively a version of 'dance' that also uses bound names.
-breakDance :: (ReadTerm t) => [(Var, Term)] -> t -> [Term]
+breakDance :: (ReadTerm t) => [(Var, Term)] -> t -> [(Term, String)]
 breakDance binds rt = let t = toTerm rt
                       in case sideStep binds t of
-                           Nothing -> [t]
-                           Just t' -> t : breakDance binds t'
+                           Left s        -> [(t, s)]
+                           Right (t', s) -> (t, s) : breakDance binds t'
 
 -- | Perform a many-step reduction by calling 'step' repeatedly.
 -- Return all the intermediary results (including the original term).
-dance :: (ReadTerm t) => t -> [Term]
+dance :: (ReadTerm t) => t -> [(Term, String)]
 dance rt = let t = toTerm rt
            in case step t of
-                Nothing -> [t]
-                Just t' -> t : dance t'
+                Left s        -> [(t, s)]
+                Right (t', s) -> (t, s) : dance t'
 
 -- | Perform a one-step call-by-name reduction with bindings.  Return
 -- 'Nothing if the term is stuck.
-sideStep :: (ReadTerm t) => [(Var, Term)] -> t -> Maybe Term
+sideStep :: (ReadTerm t) => [(Var, Term)] -> t -> Either String (Term, String)
 sideStep binds = sideStep' . toTerm
     where
       sideStep' (App (Var x) n) = case x `lookup` binds of
-                                   Nothing -> Nothing
-                                   Just m  -> Just $ App m n
+                                   Nothing -> Left "no-binding"
+                                   Just m  -> Right (App m n, "name-rep")
       sideStep' t               = step t
 
 -- | Perform a one-step call-by-name reduction.  Return 'Nothing' if
 -- the term is stuck.
-step :: (ReadTerm t) => t -> Maybe Term
+step :: (ReadTerm t) => t -> Either String (Term, String)
 step = step' . toTerm
     where
-      step' (App (Ab x m) n) = Just $ subst m x n
-      step' _                = Nothing
+      step' (App (Ab x m) n) = Right (subst m x n, "subst")
+      step' _                = Left "stuck"
 
 -- | Return the substitution in M of the variable X by the term N.
 subst :: Term   -- ^ M: The term in which to perform the substitution
