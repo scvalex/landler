@@ -69,6 +69,9 @@ step :: (ReadTerm t) => t -> Either String (Term, String)
 step = step' . toTerm
     where
       step' (App (Ab x m) n) = Right (subst m x n, "subst")
+      step' (App m n)        = case step m of
+                                 Left _        -> Left "stuck"
+                                 Right (m', s) -> Right (App m' n, s)
       step' _                = Left "stuck"
 
 -- | Return the substitution in M of the variable X by the term N.
