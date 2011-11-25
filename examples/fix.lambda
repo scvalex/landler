@@ -2,8 +2,8 @@ let fix = (\f. (\x. f (\y. x x y)) (\x. f (\y. x x y)))
 
 let Y = (\f. (\x. f (x x)) (\x. f (x x)))
 
-(fix \x. x)
+let id = (\x. x)
 
-((\y. meh) y)
+(fix id)
 
-(Y \x. x)
+(Y id)
