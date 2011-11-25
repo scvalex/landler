@@ -32,17 +32,26 @@ instance ReadTerm String where
 -- effectively a version of 'dance' that also uses bound names.
 breakDance :: (ReadTerm t) => [(Var, Term)] -> t -> [(Term, String)]
 breakDance binds rt = let t = toTerm rt
-                      in case sideStep binds t of
-                           Left s        -> [(t, s)]
-                           Right (t', s) -> (t, s) : breakDance binds t'
+                      in go [t] t
+    where
+      go soFar t = case sideStep binds t of
+                     Left s ->
+                         [(t, s)]
+                     Right (t', s)
+                         | t' `elem` soFar -> [(t, s), (t', "cycling")]
+                         | otherwise       -> (t, s) : go (t' : soFar) t'
 
 -- | Perform a many-step reduction by calling 'step' repeatedly.
 -- Return all the intermediary results (including the original term).
 dance :: (ReadTerm t) => t -> [(Term, String)]
 dance rt = let t = toTerm rt
-           in case step t of
-                Left s        -> [(t, s)]
-                Right (t', s) -> (t, s) : dance t'
+           in go [t] t
+    where
+      go soFar t = case step t of
+                     Left s        -> [(t, s)]
+                     Right (t', s)
+                         | t' `elem` soFar -> [(t, s), (t', "cycling")]
+                         | otherwise       -> (t, s) : go (t' : soFar) t'
 
 -- | Perform a one-step call-by-name reduction with bindings.  Return
 -- 'Nothing if the term is stuck.
