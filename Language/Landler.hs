@@ -14,8 +14,9 @@ module Language.Landler (
         subst, freeVariables, boundVariables
     ) where
 
-import Language.Landler.Parser
 import qualified Data.Set as S
+import Language.Landler.Parser
+import Text.Interpol ( (^-^) )
 
 -- | Type-class for things that can be turned into 'Term's.
 class ReadTerm t where
@@ -54,18 +55,27 @@ sideStep binds = sideStep' . toTerm
       sideStep' (App (Var x) n) = case x `lookup` binds of
                                    Nothing -> Left "no-binding"
                                    Just m  -> Right (App m n, "name-rep")
-      sideStep' t               = step t
+      sideStep' t               = step' (sideStep binds) t
 
 -- | Perform a one-step call-by-name reduction.  Return 'Nothing' if
 -- the term is stuck.
 step :: (ReadTerm t) => t -> Either String (Term, String)
-step = step' . toTerm
-    where
-      step' (App (Ab x m) n) = Right (subst m x n, "subst")
-      step' (App m n)        = case step m of
-                                 Left _        -> Left "stuck"
-                                 Right (m', s) -> Right (App m' n, s)
-      step' _                = Left "stuck"
+step = step' step . toTerm
+
+-- | Perform a one-step call-by-name reduction.  If the top-level of
+-- an application cannot be reduced, use REDUCER to reduce the LHS.
+step' :: (Term -> Either String (Term, String)) -- ^ REDUCER to call
+                                                -- for nested
+                                                -- reductions
+      -> Term                                   -- ^ TERM to reduce
+      -> Either String (Term, String)
+step' _ (App (Ab x m) n) = Right (subst m x n, "subst")
+step' reducer (App m n)  = case reducer m of
+                             Left reason ->
+                                 Left $ "LHS not reducible: " ^-^ reason
+                             Right (m', s) ->
+                                 Right (App m' n, s)
+step' _ _                = Left "stuck: top-level is not an application"
 
 -- | Return the substitution in M of the variable X by the term N.
 subst :: Term   -- ^ M: The term in which to perform the substitution

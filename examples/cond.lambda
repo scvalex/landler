@@ -1,0 +1,8 @@
+let true  = (\x y. x)
+let false = (\x y. y)
+
+let cond = (\b t f. b t f)
+
+(cond true m n)
+
+(cond false m n)
