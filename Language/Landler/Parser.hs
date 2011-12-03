@@ -77,7 +77,7 @@ program :: LParser [Statement]
 program = many1 statement
 
 statement :: LParser Statement
-statement = letS <|> callS
+statement = ws >> (letS <|> callS)
     where
       letS :: LParser Statement
       letS = Let <$> (llet *> lvar) <*> (leq *> lparens term)
@@ -135,8 +135,9 @@ lvar = identifier lexer
 lparens :: LParser a -> LParser a
 lparens = parens lexer
 
-ldot, llambda, llet, leq :: LParser ()
+ldot, llambda, llet, leq, ws :: LParser ()
 ldot = (reservedOp lexer) "."
 llambda = (reservedOp lexer) "\\"
 llet = (reserved lexer) "let"
 leq = (reservedOp lexer) "="
+ws = whiteSpace lexer
