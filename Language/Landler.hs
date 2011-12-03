@@ -2,7 +2,7 @@
 
 module Language.Landler (
         -- * Types
-        Statement(..), Term(..), Var,
+        Statement(..), Environment, Step, Term(..), Var,
 
         -- * Reading
         parseProgram, parseStatement, ReadTerm(..),
@@ -28,10 +28,17 @@ instance ReadTerm Term where
 instance ReadTerm String where
     toTerm = parseTerm
 
+-- | An 'Environment' maps names to the terms they represent.
+type Environment = [(Var, Term)]
+
+-- | A 'Step' is a term and a description of the reduction (if any)
+-- that can be applied to it.
+type Step = (Term, String)
+
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
 -- effectively a version of 'dance' that also uses bound names.
-breakDance :: (ReadTerm t) => [(Var, Term)] -> t -> [(Term, String)]
+breakDance :: (ReadTerm t) => Environment -> t -> [Step]
 breakDance binds rt = let t = toTerm rt
                       in go [t] t
     where
@@ -44,12 +51,12 @@ breakDance binds rt = let t = toTerm rt
 
 -- | Perform a many-step reduction by calling 'step' repeatedly.
 -- Return all the intermediary results (including the original term).
-dance :: (ReadTerm t) => t -> [(Term, String)]
+dance :: (ReadTerm t) => t -> [Step]
 dance = breakDance []
 
 -- | Perform a one-step call-by-name reduction with bindings.  Return
 -- 'Nothing if the term is stuck.
-sideStep :: (ReadTerm t) => [(Var, Term)] -> t -> Either String (Term, String)
+sideStep :: (ReadTerm t) => Environment -> t -> Either String Step
 sideStep binds = sideStep' . toTerm
     where
       sideStep' (App (Var x) n) = case x `lookup` binds of
@@ -59,16 +66,16 @@ sideStep binds = sideStep' . toTerm
 
 -- | Perform a one-step call-by-name reduction.  Return 'Nothing' if
 -- the term is stuck.
-step :: (ReadTerm t) => t -> Either String (Term, String)
+step :: (ReadTerm t) => t -> Either String Step
 step = step' step . toTerm
 
 -- | Perform a one-step call-by-name reduction.  If the top-level of
 -- an application cannot be reduced, use REDUCER to reduce the LHS.
-step' :: (Term -> Either String (Term, String)) -- ^ REDUCER to call
-                                                -- for nested
-                                                -- reductions
-      -> Term                                   -- ^ TERM to reduce
-      -> Either String (Term, String)
+step' :: (Term -> Either String Step) -- ^ REDUCER to call
+                                      -- for nested
+                                      -- reductions
+      -> Term                         -- ^ TERM to reduce
+      -> Either String Step
 step' _ (App (Ab x m) n) = Right (subst m x n, "subst")
 step' reducer (App m n)  = case reducer m of
                              Left reason ->
