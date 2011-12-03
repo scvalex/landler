@@ -1,0 +1,12 @@
+# Pairs in λ-calculus
+
+let true  = (\x y. x)
+let false = (\x y. y)
+
+let pair = (\m n z. z m n)
+
+let first = (\p. p true)
+let second = (\p. p false)
+
+(first (pair m n))
+(second (pair m n))
