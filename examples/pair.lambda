@@ -1,4 +1,4 @@
-# Pairs in λ-calculus
+; Pairs in λ-calculus
 
 let true  = (\x y. x)
 let false = (\x y. y)

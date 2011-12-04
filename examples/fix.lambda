@@ -1,4 +1,4 @@
-# Fix-point combinators in λ-calculus
+; Fix-point combinators in λ-calculus
 
 let fix = (\f. (\x. f (\y. x x y)) (\x. f (\y. x x y)))
 

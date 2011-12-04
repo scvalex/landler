@@ -1,10 +1,10 @@
-# Scott numerals in λ-calculus
+; Scott numerals in λ-calculus
 
-# some common combinators
+; some common combinators
 let K = (\x y. x)
 let I = (\x. x)
 
-# numerals
+; numerals
 let zero = (K)
 let succ = (\n x y. y n)
 let pred = (\p. p K I)

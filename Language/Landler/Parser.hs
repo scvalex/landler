@@ -121,7 +121,7 @@ var = Var <$> lvar
 type LParser a = ParsecT String () Identity a
 
 lambdaCalculusDef :: LanguageDef st
-lambdaCalculusDef = emptyDef { commentLine = "#"
+lambdaCalculusDef = emptyDef { commentLine = ";"
                              , opStart = opLetter lambdaCalculusDef
                              , opLetter = oneOf ".\\="
                              , reservedOpNames = [".", "\\", "=", "let"] }
