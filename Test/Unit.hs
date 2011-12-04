@@ -49,6 +49,9 @@ exampleTests :: Test
 exampleTests =
     test [ "pair" ~: exampleTest "examples/pair.lambda" [v "m", v "n"]
          , "cond" ~: exampleTest "examples/cond.lambda" [v "m", v "n"]
+         , "scott" ~: exampleTest "examples/scott.lambda"
+                       [ v "true", v "false", v "true", v "true", v "true"
+                       , v "true", v "false", v "false" ]
          ]
 
 parseTest :: String -> Term -> Test

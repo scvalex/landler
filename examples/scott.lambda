@@ -4,10 +4,25 @@
 let K = (\x y. x)
 let I = (\x. x)
 
+; bools
+let true  = (\x y. x)
+let false = (\x y. y)
+let cond = (\b t f. b t f)
+
 ; numerals
 let zero = (K)
 let succ = (\n x y. y n)
 let pred = (\p. p K I)
 
-(succ zero)
-(succ (succ zero))
+; predicates
+let isZero = (\n. n true (K false))
+let eq = (\m n. cond (isZero m) (isZero n) (eq (pred m) (pred n)))
+
+(isZero zero)
+(isZero (succ zero))
+(isZero (pred zero))
+(eq (succ zero) (succ zero))
+(eq (succ zero) (pred (succ (succ zero))))
+(eq zero (pred zero))
+(eq zero (pred (succ (succ zero))))
+(eq zero (succ (zero)))
