@@ -8,7 +8,7 @@ module Language.Landler (
         parseProgram, parseStatement, ReadTerm(..),
 
         -- * Reductions
-        breakDance, dance, sideStep, step,
+        run, breakDance, dance, sideStep, step,
 
         -- * Utilities
         subst, freeVariables, boundVariables
@@ -34,6 +34,19 @@ type Environment = [(Var, Term)]
 -- | A 'Step' is a term and a description of the reduction (if any)
 -- that can be applied to it.
 type Step = (Term, String)
+
+-- | Run the LC program in the given file and return the bound names
+-- and the sequences of steps that in the evaluations of the calls
+-- read.
+run :: FilePath -> IO (Environment, [[Step]])
+run fn = do
+  stmts <- parseFile fn
+  let (terms, binds) = foldr (\s (ts, bs) -> case s of
+                                               Let v t -> (ts, (v, t) : bs)
+                                               Call t  -> (t : ts, bs))
+                             ([], []) stmts
+  return (binds, map (breakDance binds) terms)
+
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is

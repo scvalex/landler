@@ -1,21 +1,16 @@
 module Main where
 
-import Language.Landler ( Term, breakDance )
-import Language.Landler.Parser ( Statement(..), parseFile )
+import Language.Landler ( Step, run )
 import System.Environment ( getArgs )
 import Text.Interpol ( (^-^) )
 
 main :: IO ()
 main = do
   [fn] <- getArgs
-  stmts <- parseFile fn
-  let (terms, binds) = foldr (\s (ts, bs) -> case s of
-                                               Let v t -> (ts, (v, t) : bs)
-                                               Call t  -> (t : ts, bs))
-                             ([], []) stmts
-  putStrLn $ concatMap (prettyPrint . breakDance binds) terms
+  (_, stepss) <- run fn
+  putStrLn $ concatMap prettyPrint stepss
 
-prettyPrint :: [(Term, String)] -> String
+prettyPrint :: [Step] -> String
 prettyPrint = unlines . go
     where
       go []            = ["---"]

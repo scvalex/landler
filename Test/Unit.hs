@@ -6,7 +6,7 @@ import Test.HUnit
 
 main :: IO ()
 main = do
-  runCounts <- runTestTT $ test [parseTests]
+  runCounts <- runTestTT $ test [parseTests, exampleTests]
   if failures runCounts + errors runCounts == 0
      then
        putStrLn "All tests pass :)"
@@ -45,12 +45,23 @@ parseTests =
                                               (v "x"))))))
          ]
 
+exampleTests :: Test
+exampleTests =
+    test [ "pair" ~: exampleTest "examples/pair.lambda" [v "m", v "n"]
+         , "cond" ~: exampleTest "examples/cond.lambda" [v "m", v "n"]
+         ]
+
 parseTest :: String -> Term -> Test
 parseTest text term = TestCase $ assertEqual "" term (toTerm text)
 
 parseTestS :: String -> Statement -> Test
 parseTestS text statement =
     TestCase $ assertEqual "" statement (parseStatement text)
+
+exampleTest :: FilePath -> [Term] -> Test
+exampleTest fp terms = TestCase $ do
+                         (_, stepss) <- run fp
+                         assertEqual "" terms (map (fst . last) stepss)
 
 v :: String -> Term
 v x = Var x
