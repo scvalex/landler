@@ -1,12 +1,14 @@
 module Main where
 
 import Control.Monad.IO.Class ( liftIO )
+import Data.Maybe ( fromJust )
 import System.Console.Haskeline ( InputT, runInputT
                                 , Settings(..), defaultSettings
                                 , getInputLine )
 import Language.Landler ( Term, Var
                         , Step, run, breakDance
-                        , Statement(..), parseStatement )
+                        , Statement(..), parseStatement
+                        , ParseError(..) )
 import System.Environment ( getArgs )
 import Text.Interpol ( (^-^) )
 
@@ -44,12 +46,20 @@ runInterpreter = printBanner >> runInputT settings (loop [])
           Just input -> handleStatement env input >>= loop
 
       handleStatement :: Environment -> String -> InputT IO Environment
-      handleStatement env str = do
-        let stmt = parseStatement str
-        case stmt of
-          Let v t -> return $ (v, t) : env
-          Call t -> liftIO (putStrLn . prettyPrint $ breakDance env t) >>
-                    return env
+      handleStatement env str =
+          case parseStatement str of
+            Left err -> do
+              liftIO $ reportError err str
+              return env
+            Right stmt -> do
+              case stmt of
+                Let v t -> return $ (v, t) : env
+                Call t  -> liftIO (putStrLn . prettyPrint . fromJust $
+                                   breakDance env t) >>
+                           return env
+
+      reportError :: ParseError -> String -> IO ()
+      reportError err _ = putStrLn $ "Encountered error " ^-^ err
 
 prettyPrint :: [Step] -> String
 prettyPrint = unlines . go

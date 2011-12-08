@@ -1,14 +1,20 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts #-}
 
 module Language.Landler.Parser (
-        Statement(..), Term(..), Var,
+        Statement(..), Term(..), Var, ParseError(..),
         parseFile, parseProgram, parseStatement, parseTerm
     ) where
 
 import Control.Applicative ( (<$>), (*>), (<*>) )
+import qualified Control.Exception as CE
+import Control.Monad.Error.Class ( MonadError(..), Error(..) )
 import Data.Functor.Identity ( Identity )
+import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
-import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>) )
+import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>)
+                   , sourceLine, sourceColumn, errorPos )
+import qualified Text.Parsec as P
+import Text.Parsec.Error ( errorMessages, showErrorMessages )
 import Text.Parsec.Language ( emptyDef )
 import Text.Parsec.String ( parseFromFile )
 import Text.Parsec.Token ( GenLanguageDef(..), LanguageDef
@@ -50,6 +56,19 @@ instance Show Term where
           showP (Var x) = x
           showP q       = "(" ^-^ q ^-^ ")"
 
+-- | Represents a landler parser error (duh).  It is a thin wrapper
+-- around Parsec's @ParseError@.  This exists because we do not want
+-- modules above this parser to depend on Parsec.
+data ParseError = ParseError Int    -- ^ Line number
+                             Int    -- ^ Column number
+                             String -- ^ Insightful message
+                  deriving ( Typeable, Show )
+
+instance CE.Exception ParseError
+
+instance Error ParseError where
+    strMsg = ParseError 0 0
+
 ----------------------------------------------------------------------
 -- Parser
 ----------------------------------------------------------------------
@@ -57,21 +76,23 @@ instance Show Term where
 parseFile :: FilePath -> IO [Statement]
 parseFile fn = do
   res <- parseFromFile program fn
-  return $ handleResult res
+  case res of
+    Left err -> CE.throw (mkParseError err)
+    Right ss -> return ss
 
-parseProgram :: String -> [Statement]
+parseProgram :: (MonadError ParseError m) => String -> m [Statement]
 parseProgram text = handleResult (parse program "input" text)
 
-parseStatement :: String -> Statement
+parseStatement :: (MonadError ParseError m) => String -> m Statement
 parseStatement text = handleResult (parse statement "input" text)
 
-parseTerm :: String -> Term
+parseTerm :: (MonadError ParseError m) => String -> m Term
 parseTerm text = handleResult (parse term "input" text)
 
-handleResult :: Show a => Either a t -> t
+handleResult :: (MonadError ParseError m) => Either P.ParseError t -> m t
 handleResult res = case res of
-                     Left err -> error (show err)
-                     Right t  -> t
+                     Left err -> throwError (mkParseError err)
+                     Right t  -> return t
 
 program :: LParser [Statement]
 program = many1 statement
@@ -113,6 +134,13 @@ varlist = manyTill lvar ldot
 
 var :: LParser Term
 var = Var <$> lvar
+
+mkParseError :: P.ParseError -> ParseError
+mkParseError err = ParseError (sourceLine $ errorPos err)
+                              (sourceColumn $ errorPos err)
+                              (showErrorMessages "or" "unknown" "expecting"
+                                                 "unexpected" "end of input"
+                                                 $ errorMessages err)
 
 ----------------------------------------------------------------------
 -- Lexer

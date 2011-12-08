@@ -5,7 +5,8 @@ module Language.Landler (
         Statement(..), Environment, Step, Term(..), Var,
 
         -- * Reading
-        parseProgram, parseStatement, ReadTerm(..),
+        parseProgram, parseStatement, parseTerm, ReadTerm(..),
+        ParseError(..),
 
         -- * Reductions
         run, breakDance, dance, sideStep, step,
@@ -20,13 +21,15 @@ import Text.Interpol ( (^-^) )
 
 -- | Type-class for things that can be turned into 'Term's.
 class ReadTerm t where
-    toTerm :: t -> Term
+    toTerm :: (Monad m) => t -> m Term
 
 instance ReadTerm Term where
-    toTerm = id
+    toTerm = return
 
 instance ReadTerm String where
-    toTerm = parseTerm
+    toTerm str = case parseTerm str of
+                   Left err -> fail ("error " ^-^ err)
+                   Right t  -> return t
 
 -- | An 'Environment' maps names to the terms they represent.
 type Environment = [(Var, Term)]
@@ -45,15 +48,19 @@ run fn = do
                                                Let v t -> (ts, (v, t) : bs)
                                                Call t  -> (t : ts, bs))
                              ([], []) stmts
-  return (binds, map (breakDance binds) terms)
+  stepss <- mapM (breakDance binds) terms
+  return (binds, stepss)
 
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
--- effectively a version of 'dance' that also uses bound names.
-breakDance :: (ReadTerm t) => Environment -> t -> [Step]
-breakDance binds rt = let t = toTerm rt
-                      in go [t] t
+-- effectively a version of 'dance' that also uses bound names.  The
+-- only way to cause this function to fail is to pass it a parameter
+-- that cannot be converted to a term.
+breakDance :: (ReadTerm t, Monad m) => Environment -> t -> m [Step]
+breakDance binds rt = do
+  t <- toTerm rt
+  return $ go [t] t
     where
       go soFar t = case sideStep binds t of
                      Left s ->
@@ -64,23 +71,23 @@ breakDance binds rt = let t = toTerm rt
 
 -- | Perform a many-step reduction by calling 'step' repeatedly.
 -- Return all the intermediary results (including the original term).
-dance :: (ReadTerm t) => t -> [Step]
+-- The only way to cause this function to fail is to pass it a
+-- parameter that cannot be converted to a term.
+dance :: (ReadTerm t, Monad m) => t -> m [Step]
 dance = breakDance []
 
 -- | Perform a one-step call-by-name reduction with bindings.  Return
 -- 'Nothing if the term is stuck.
-sideStep :: (ReadTerm t) => Environment -> t -> Either String Step
-sideStep binds = sideStep' . toTerm
-    where
-      sideStep' (App (Var x) n) = case x `lookup` binds of
+sideStep :: Environment -> Term -> Either String Step
+sideStep binds (App (Var x) n) = case x `lookup` binds of
                                    Nothing -> Left "no-binding"
                                    Just m  -> Right (App m n, "name-rep")
-      sideStep' t               = step' (sideStep binds) t
+sideStep binds t               = step' (sideStep binds) t
 
 -- | Perform a one-step call-by-name reduction.  Return 'Nothing' if
 -- the term is stuck.
-step :: (ReadTerm t) => t -> Either String Step
-step = step' step . toTerm
+step :: Term -> Either String Step
+step = step' step
 
 -- | Perform a one-step call-by-name reduction.  If the top-level of
 -- an application cannot be reduced, use REDUCER to reduce the LHS.
