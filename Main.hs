@@ -40,16 +40,17 @@ runInterpreter = printBanner >> runInputT settings (loop [])
         let envKeys = case unwords $ map fst env of
                         "" -> "∅"
                         ek -> ek
-        minput <- getInputLine (envKeys ^-^ " > ")
+        let prompt = envKeys ^-^ " > "
+        minput <- getInputLine prompt
         case minput of
           Nothing    -> return ()
-          Just input -> handleStatement env input >>= loop
+          Just input -> handleStatement env (length prompt) input >>= loop
 
-      handleStatement :: Environment -> String -> InputT IO Environment
-      handleStatement env str =
+      handleStatement :: Environment -> Int -> String -> InputT IO Environment
+      handleStatement env plen str =
           case parseStatement str of
             Left err -> do
-              liftIO $ reportError err str
+              liftIO $ reportError err plen
               return env
             Right stmt -> do
               case stmt of
@@ -58,8 +59,12 @@ runInterpreter = printBanner >> runInputT settings (loop [])
                                    breakDance env t) >>
                            return env
 
-      reportError :: ParseError -> String -> IO ()
-      reportError err _ = putStrLn $ "Encountered error " ^-^ err
+      reportError :: ParseError -> Int -> IO ()
+      reportError err@(ParseError line col _) plen = do
+        if line == 1
+          then putStrLn $ (replicate (plen + col - 1) ' ') ^-^ "^ here"
+          else return ()
+        putStrLn $ "Encountered error " ^-^ err
 
 prettyPrint :: [Step] -> String
 prettyPrint = unlines . go
