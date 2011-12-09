@@ -32,14 +32,14 @@ main = do
   quickCheck prop_IdemParseShowStatement
 
 prop_IdemParseShow :: Term -> Property
-prop_IdemParseShow x = not (isVar x) ==> x == toTerm (show x)
+prop_IdemParseShow x = not (isVar x) ==> (Just x) == toTerm (show x)
     where
       isVar :: Term -> Bool
       isVar (Var _) = True
       isVar _       = False
 
 prop_IdemParseShowStatement :: Statement -> Bool
-prop_IdemParseShowStatement x = x == parseStatement (show x)
+prop_IdemParseShowStatement x = (Right x) == parseStatement (show x)
 
 name :: Gen String
 name = choose (0, 100) >>= \i -> return (allVars !! i)

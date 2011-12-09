@@ -62,7 +62,7 @@ instance Show Term where
 data ParseError = ParseError Int    -- ^ Line number
                              Int    -- ^ Column number
                              String -- ^ Insightful message
-                  deriving ( Typeable, Show )
+                  deriving ( Eq, Show, Typeable )
 
 instance CE.Exception ParseError
 
