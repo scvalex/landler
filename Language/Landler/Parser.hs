@@ -62,12 +62,18 @@ instance Show Term where
 data ParseError = ParseError Int    -- ^ Line number
                              Int    -- ^ Column number
                              String -- ^ Insightful message
-                  deriving ( Eq, Show, Typeable )
+                  deriving ( Eq, Typeable )
 
 instance CE.Exception ParseError
 
 instance Error ParseError where
     strMsg = ParseError 0 0
+
+instance Show ParseError where
+    show (ParseError line col msg) =
+        let msgs = filter (not . null) $ lines msg
+            msg' = unlines $ map ("    " ^-^) msgs
+        in "" ^-^ line ^-^ ":" ^-^ col ^-^ ":\n" ^-^ msg'
 
 ----------------------------------------------------------------------
 -- Parser
