@@ -19,6 +19,7 @@ parseTests :: Test
 parseTests =
     test . concat $
              [ map (\(n, s, t) -> n ~: parseTest s t) positiveTermParses
+             , map (\(n, s) -> n ~: negParseTest s) negativeTermParses
              , map (\(n, s, t) -> n ~: parseTestS s t) positiveStatementParses
              ]
 
@@ -39,6 +40,18 @@ positiveTermParses =
        Ab "x" (Ab "y" (Ab "z" (App (App (v "z") (v "y")) (v "x")))))
     , ("app-ab", "(\\x . x) \\x . x", App (Ab "x" (v "x")) (Ab "x" (v "x")))
     , ("prec", "\\x. y \\z. y", Ab "x" (App (Var "y") (Ab "z" (Var "y"))))
+    ]
+
+negativeTermParses :: [(String, String)]
+negativeTermParses =
+    [ ("no-body", "\\x")
+    , ("no-head", "\\.x")
+    , ("emptyab", "\\.")
+    , ("inv-var", "12x")
+--    , ("dots", "\\x. y. z")  We can't check for trailling garbage.
+--    , ("dots2", "\\x. y.")
+    , ("slshs", "\\\\")
+    , ("slshs2", "\\x.\\\\")
     ]
 
 positiveStatementParses :: [(String, String, Statement)]
@@ -62,6 +75,9 @@ exampleResults =
 
 parseTest :: String -> Term -> Test
 parseTest text term = TestCase $ assertEqual "" term (fromJust $ toTerm text)
+
+negParseTest :: String -> Test
+negParseTest text = TestCase $ assertEqual "" Nothing (toTerm text)
 
 parseTestS :: String -> Statement -> Test
 parseTestS text statement = let (Right res) = parseStatement text
