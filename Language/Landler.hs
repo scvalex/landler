@@ -17,6 +17,7 @@ module Language.Landler (
 
 import qualified Data.Set as S
 import Language.Landler.Parser
+import System.FilePath ( replaceBaseName )
 import Text.Interpol ( (^-^) )
 
 -- | Type-class for things that can be turned into 'Term's.
@@ -43,14 +44,9 @@ type Step = (Term, String)
 -- read.
 run :: FilePath -> IO (Environment, [[Step]])
 run fn = do
-  stmts <- parseFile fn
-  let (terms, binds) = foldr (\s (ts, bs) -> case s of
-                                               Let v t -> (ts, (v, t) : bs)
-                                               Call t  -> (t : ts, bs))
-                             ([], []) stmts
+  (terms, binds) <- parseFileResolveImports fn
   stepss <- mapM (breakDance binds) terms
   return (binds, stepss)
-
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
@@ -144,3 +140,39 @@ allVars = let vs = "" : [v ++ [s] | v <- vs, s <- ['a'..'z']]
 -- | Return a variable name not found in the given set.
 newVar :: S.Set Var -> Var
 newVar usedVariables = head $ dropWhile (flip S.member usedVariables) allVars
+
+-- | Separate the elements of a list by a predicate.  The first
+-- returned list contains the elemnts for which the predicate holds;
+-- the second contains the ones for which it does not.
+separate :: (a -> Bool) -> [a] -> ([a], [a])
+separate p ts = let (xs', ys') = foldl (\(xs, ys) z ->
+                                            if p z then (z:xs, ys)
+                                                   else (xs, z:ys)) ([], []) ts
+                in (reverse xs', reverse ys')
+
+-- | Parse the specified file and resolve any imports it may have by
+-- parsing and resolving those files as well.  Return a pair
+-- containing the list of terms read and the list of bindings found.
+-- Terms and bindings from imported modules appear before terms and
+-- bindings from the importing modules.
+parseFileResolveImports :: FilePath -> IO ([Term], [(Var, Term)])
+parseFileResolveImports fn = do
+  stmts <- parseFile fn
+  let (terms, binds) = foldr (\s (ts, bs) -> case s of
+                                               Let v t -> (ts, (v, t) : bs)
+                                               Call t  -> (t : ts, bs))
+                             ([], []) stmts
+      (imports, terms') = separate (\t -> case t of
+                                            App (Var "import") _ -> True
+                                            _                    -> False) terms
+  resolves <- mapM (\t -> case t of
+                            (App _ (Var mn)) ->
+                                parseFileResolveImports (findModule fn mn)
+                            _                ->
+                                error "internal error: imports") imports
+  let (extraTerms, extraBinds) =
+          foldl (\(ets, ebs) (ts, bs) -> (ets ++ ts, ebs ++ bs)) ([], []) resolves
+  return (extraTerms ++ terms', extraBinds ++ binds)
+    where
+      findModule :: FilePath -> String -> FilePath
+      findModule = replaceBaseName

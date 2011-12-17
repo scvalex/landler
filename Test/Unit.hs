@@ -71,6 +71,7 @@ exampleResults =
     , ("scott", "examples/scott.lambda",
        [ v "true", v "false", v "true", v "true", v "true"
        , v "true", v "false", v "false" ])
+    , ("import", "examples/import.lambda", [ v "y" ])
     ]
 
 parseTest :: String -> Term -> Test
