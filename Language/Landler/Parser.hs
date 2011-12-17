@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleContexts #-}
 
 module Language.Landler.Parser (
-        Statement(..), Term(..), Var, ParseError(..),
-        parseFile, parseProgram, parseStatement, parseTerm
+        Module(..), Statement(..), Term(..), Var, ParseError(..),
+        parseModule, parseProgram, parseStatement, parseTerm
     ) where
 
 import Control.Applicative ( (<$>), (*>), (<*>) )
@@ -10,6 +10,7 @@ import qualified Control.Exception as CE
 import Control.Monad.Error.Class ( MonadError(..), Error(..) )
 import Data.Functor.Identity ( Identity )
 import Data.Typeable ( Typeable )
+import System.FilePath ( takeFileName )
 import Text.Interpol ( (^-^) )
 import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>)
                    , sourceLine, sourceColumn, errorPos )
@@ -75,16 +76,24 @@ instance Show ParseError where
             msg' = unlines $ map ("    " ^-^) msgs
         in "" ^-^ line ^-^ ":" ^-^ col ^-^ ":\n" ^-^ msg'
 
+-- | A 'Module' encapsulates the lambda-data found in a file.
+data Module = Module { getModuleName :: String
+                     , getModulePath :: FilePath
+                     , getModuleImports :: [String]
+                     , getModuleBindings :: [(Var, Term)]
+                     , getModuleTerms :: [Term]
+                     } deriving ( Show )
+
 ----------------------------------------------------------------------
 -- Parser
 ----------------------------------------------------------------------
 
-parseFile :: FilePath -> IO [Statement]
-parseFile fn = do
+parseModule :: FilePath -> IO Module
+parseModule fn = do
   res <- parseFromFile program fn
   case res of
     Left err -> CE.throw (mkParseError err)
-    Right ss -> return ss
+    Right ss -> return $ mkModule fn ss
 
 parseProgram :: (MonadError ParseError m) => String -> m [Statement]
 parseProgram text = handleResult (parse program "input" text)
@@ -141,13 +150,6 @@ varlist = manyTill lvar ldot
 var :: LParser Term
 var = Var <$> lvar
 
-mkParseError :: P.ParseError -> ParseError
-mkParseError err = ParseError (sourceLine $ errorPos err)
-                              (sourceColumn $ errorPos err)
-                              (showErrorMessages "or" "unknown" "expecting"
-                                                 "unexpected" "end of input"
-                                                 $ errorMessages err)
-
 ----------------------------------------------------------------------
 -- Lexer
 ----------------------------------------------------------------------
@@ -175,3 +177,48 @@ llambda = (reservedOp lexer) "\\"
 llet = (reserved lexer) "let"
 leq = (reservedOp lexer) "="
 ws = whiteSpace lexer
+
+----------------------------------------------------------------------
+-- Structure
+----------------------------------------------------------------------
+
+-- | Convert a Parsec @ParseError@ into the equivalent 'ParseError'.
+mkParseError :: P.ParseError -> ParseError
+mkParseError err = ParseError (sourceLine $ errorPos err)
+                              (sourceColumn $ errorPos err)
+                              (showErrorMessages "or" "unknown" "expecting"
+                                                 "unexpected" "end of input"
+                                                 $ errorMessages err)
+
+-- | Given a list of statements, separate them into imports, bindings,
+-- etc. and return a 'Module' structure.
+mkModule :: FilePath -> [Statement] -> Module
+mkModule fp stmts =
+    let (ts, bs) = foldr (\s (ts1, bs1) -> case s of
+                                           Let v t -> (ts1, (v, t) : bs1)
+                                           Call t  -> (t : ts1, bs1))
+                         ([], []) stmts
+        (imports, ts') =
+            separate (\t -> case t of
+                              App (Var "import") _ -> True
+                              _                    -> False) ts
+        imports' =
+            map (\t -> case t of
+                         (App _ (Var mn)) -> mn
+                         _                -> error "error: imports") imports
+    in Module { getModuleName = takeFileName fp
+              , getModulePath = fp
+              , getModuleImports = imports'
+              , getModuleBindings = bs
+              , getModuleTerms = ts'
+              }
+
+-- | Separate the elements of a list by a predicate.  The first
+-- returned list contains the elemnts for which the predicate holds;
+-- the second contains the ones for which it does not.
+separate :: (a -> Bool) -> [a] -> ([a], [a])
+separate p ts =
+    let (xs', ys') = foldl (\(xs, ys) z ->
+                                if p z then (z:xs, ys)
+                                       else (xs, z:ys)) ([], []) ts
+    in (reverse xs', reverse ys')
