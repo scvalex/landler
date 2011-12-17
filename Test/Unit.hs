@@ -1,5 +1,8 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Main where
 
+import qualified Control.Exception as CE
 import Data.Maybe
 import Language.Landler
 import System.Exit ( exitFailure )
@@ -25,7 +28,9 @@ parseTests =
 
 exampleTests :: Test
 exampleTests =
-    test $ map (\(n, fp, ts) -> n ~: exampleTest fp ts) exampleResults
+    test . concat $
+         [ map (\(n, fp, ts) -> n ~: exampleTest fp ts) positiveExampleTests
+         , map (\(n, s) -> n ~: negExampleTest s) negativeExampleTests ]
 
 positiveTermParses :: [(String, String, Term)]
 positiveTermParses =
@@ -64,14 +69,20 @@ positiveStatementParses =
        Let "m" (Ab "x" (Ab "y" (Ab "z" (App (App (v "z") (v "y")) (v "x"))))))
     ]
 
-exampleResults :: [(String, FilePath, [Term])]
-exampleResults =
+positiveExampleTests :: [(String, FilePath, [Term])]
+positiveExampleTests =
     [ ("pair", "examples/pair.lambda", [v "m", v "n"])
     , ("cond", "examples/cond.lambda", [v "m", v "n"])
     , ("scott", "examples/scott.lambda",
        [ v "true", v "false", v "true", v "true", v "true"
        , v "true", v "false", v "false" ])
     , ("import", "examples/import.lambda", [ v "y" ])
+    ]
+
+negativeExampleTests :: [(String, FilePath)]
+negativeExampleTests =
+    [ ("import-cycle1", "examples/cycleA.lambda")
+    , ("import-cycle2", "examples/cycleB.lambda")
     ]
 
 parseTest :: String -> Term -> Test
@@ -88,6 +99,11 @@ exampleTest :: FilePath -> [Term] -> Test
 exampleTest fp terms = TestCase $ do
                          (_, stepss) <- run fp
                          assertEqual "" terms (map (fst . last) stepss)
+
+negExampleTest :: FilePath -> Test
+negExampleTest fp = TestCase $
+                    CE.handle (\(_ :: CE.SomeException) -> return ()) $
+                    run fp >> return ()
 
 v :: String -> Term
 v x = Var x

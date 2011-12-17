@@ -1,0 +1,3 @@
+# This module forms an import cycle with cycleA.  It should be rejected.
+
+(import cycleA)

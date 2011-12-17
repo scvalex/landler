@@ -15,6 +15,7 @@ module Language.Landler (
         subst, freeVariables, boundVariables
     ) where
 
+import Control.Monad ( when )
 import qualified Data.Set as S
 import Language.Landler.Parser
 import System.FilePath ( replaceBaseName )
@@ -44,7 +45,7 @@ type Step = (Term, String)
 -- read.
 run :: FilePath -> IO (Environment, [[Step]])
 run fn = do
-  (terms, binds) <- parseFileResolveImports fn
+  (terms, binds) <- parseFileResolveImports [] fn
   stepss <- mapM (breakDance binds) terms
   return (binds, stepss)
 
@@ -146,13 +147,19 @@ newVar usedVariables = head $ dropWhile (flip S.member usedVariables) allVars
 -- containing the list of terms read and the list of bindings found.
 -- Terms and bindings from imported modules appear before terms and
 -- bindings from the importing modules.
-parseFileResolveImports :: FilePath -> IO ([Term], [(Var, Term)])
-parseFileResolveImports fn = do
+parseFileResolveImports :: [FilePath] -- ^ List of files already
+                                      -- loaded.  If a cycle is
+                                      -- detected, fail.
+                        -> FilePath
+                        -> IO ([Term], [(Var, Term)])
+parseFileResolveImports fns fn = do
+  when (fn `elem` fns) . fail $ "import cycle detected: " ^-^ fns
   m <- parseModule fn
-  resolves <- mapM (parseFileResolveImports . findModule fn)
+  resolves <- mapM (parseFileResolveImports (fn:fns) . findModule fn)
                    (getModuleImports m)
   let (extraTerms, extraBinds) =
-          foldl (\(ets, ebs) (ts, bs) -> (ets ++ ts, ebs ++ bs)) ([], []) resolves
+          foldl (\(ets, ebs) (ts, bs) -> (ets ++ ts, ebs ++ bs))
+                ([], []) resolves
   return ( extraTerms ++ (getModuleTerms m)
          , extraBinds ++ (getModuleBindings m))
     where
