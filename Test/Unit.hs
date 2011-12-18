@@ -67,6 +67,7 @@ positiveStatementParses =
     , ("let", "let id = (\\x. x)", Let "id" (Ab "x" (Var "x")))
     , ("let2", "let m = (\\x y z. z y x)",
        Let "m" (Ab "x" (Ab "y" (Ab "z" (App (App (v "z") (v "y")) (v "x"))))))
+    , ("import", "import prelude", Import "prelude")
     ]
 
 positiveExampleTests :: [(String, FilePath, [Term])]
