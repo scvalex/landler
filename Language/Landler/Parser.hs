@@ -5,14 +5,14 @@ module Language.Landler.Parser (
         parseModule, parseProgram, parseStatement, parseTerm
     ) where
 
-import Control.Applicative ( (<$>), (*>), (<*>) )
+import Control.Applicative ( (<$>), (<*), (*>), (<*>) )
 import qualified Control.Exception as CE
 import Control.Monad.Error.Class ( MonadError(..), Error(..) )
 import Data.Functor.Identity ( Identity )
 import Data.Typeable ( Typeable )
 import System.FilePath ( takeFileName )
 import Text.Interpol ( (^-^) )
-import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>)
+import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>), eof
                    , sourceLine, sourceColumn, errorPos )
 import qualified Text.Parsec as P
 import Text.Parsec.Error ( errorMessages, showErrorMessages )
@@ -111,7 +111,7 @@ handleResult res = case res of
                      Right t  -> return t
 
 program :: LParser [Statement]
-program = many1 statement
+program = many1 statement <* eof
 
 statement :: LParser Statement
 statement = ws >> (letS <|> importS <|> callS)
