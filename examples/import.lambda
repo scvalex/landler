@@ -1,3 +1,5 @@
-(import prelude)
+; Test for importing. 'id' is defined in prelude
+
+import prelude
 
 (id y)

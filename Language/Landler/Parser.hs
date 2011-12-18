@@ -34,12 +34,13 @@ type Var = String
 -- to the variable name or @(<term>)@ which evaluates the term and
 -- prints out the result.  These are meta-syntactic constructs; they
 -- are not part of the lambda-calculus.
-data Statement = Let Var Term | Call Term
+data Statement = Let Var Term | Call Term | Import String
                  deriving ( Eq )
 
 instance Show Statement where
-    show (Let v t) = "let " ^-^ v ^-^ " = (" ^-^ t ^-^ ")"
-    show (Call t)  = "(" ^-^ t ^-^ ")"
+    show (Let v t)   = "let " ^-^ v ^-^ " = (" ^-^ t ^-^ ")"
+    show (Call t)    = "(" ^-^ t ^-^ ")"
+    show (Import mn) = "import " ^-^ mn
 
 -- | Lambda-calculus terms are variables, abstractions or
 -- applications.
@@ -113,12 +114,10 @@ program :: LParser [Statement]
 program = many1 statement
 
 statement :: LParser Statement
-statement = ws >> (letS <|> callS)
+statement = ws >> (letS <|> importS <|> callS)
     where
-      letS :: LParser Statement
       letS = Let <$> (llet *> lvar) <*> (leq *> lparens term)
-
-      callS :: LParser Statement
+      importS = Import <$> (limport *> lvar)
       callS = Call <$> lparens term
 
 term :: LParser Term
@@ -160,7 +159,8 @@ lambdaCalculusDef :: LanguageDef st
 lambdaCalculusDef = emptyDef { commentLine = ";"
                              , opStart = opLetter lambdaCalculusDef
                              , opLetter = oneOf ".\\="
-                             , reservedOpNames = [".", "\\", "=", "let"] }
+                             , reservedOpNames = [ ".", "\\", "=", "let"
+                                                 , "import" ] }
 
 lexer :: GenTokenParser String u Identity
 lexer = makeTokenParser lambdaCalculusDef
@@ -171,10 +171,11 @@ lvar = identifier lexer
 lparens :: LParser a -> LParser a
 lparens = parens lexer
 
-ldot, llambda, llet, leq, ws :: LParser ()
+ldot, llambda, llet, limport, leq, ws :: LParser ()
 ldot = (reservedOp lexer) "."
 llambda = (reservedOp lexer) "\\"
 llet = (reserved lexer) "let"
+limport = (reserved lexer) "import"
 leq = (reservedOp lexer) "="
 ws = whiteSpace lexer
 
@@ -194,31 +195,15 @@ mkParseError err = ParseError (sourceLine $ errorPos err)
 -- etc. and return a 'Module' structure.
 mkModule :: FilePath -> [Statement] -> Module
 mkModule fp stmts =
-    let (ts, bs) = foldr (\s (ts1, bs1) -> case s of
-                                           Let v t -> (ts1, (v, t) : bs1)
-                                           Call t  -> (t : ts1, bs1))
-                         ([], []) stmts
-        (imports, ts') =
-            separate (\t -> case t of
-                              App (Var "import") _ -> True
-                              _                    -> False) ts
-        imports' =
-            map (\t -> case t of
-                         (App _ (Var mn)) -> mn
-                         _                -> error "error: imports") imports
+    let (is, bs, ts) = foldr (\s (is1, bs1, ts1) ->
+                                  case s of
+                                    Let v t -> (is1, (v, t) : bs1, ts1)
+                                    Call t  -> (is1, bs1, t : ts1)
+                                    Import mn -> (mn : is1, bs1, ts1))
+                             ([], [], []) stmts
     in Module { getModuleName = takeFileName fp
               , getModulePath = fp
-              , getModuleImports = imports'
+              , getModuleImports = is
               , getModuleBindings = bs
-              , getModuleTerms = ts'
+              , getModuleTerms = ts
               }
-
--- | Separate the elements of a list by a predicate.  The first
--- returned list contains the elemnts for which the predicate holds;
--- the second contains the ones for which it does not.
-separate :: (a -> Bool) -> [a] -> ([a], [a])
-separate p ts =
-    let (xs', ys') = foldl (\(xs, ys) z ->
-                                if p z then (z:xs, ys)
-                                       else (xs, z:ys)) ([], []) ts
-    in (reverse xs', reverse ys')

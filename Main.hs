@@ -54,10 +54,13 @@ runInterpreter = printBanner >> runInputT settings (loop [])
               return env
             Right stmt -> do
               case stmt of
-                Let v t -> return $ (v, t) : env
-                Call t  -> liftIO (putStrLn . prettyPrint . fromJust $
-                                   breakDance env t) >>
-                           return env
+                Let v t   -> return $ (v, t) : env
+                Call t    -> liftIO (putStrLn . prettyPrint . fromJust $
+                                     breakDance env t) >>
+                             return env
+                Import _  -> liftIO $ putStrLn "import handling not \
+                                               \implemented" >>
+                             return env
 
       reportError :: ParseError -> Int -> IO ()
       reportError err@(ParseError line col _) plen = do
