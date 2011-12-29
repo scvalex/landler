@@ -59,7 +59,13 @@ type Step = (Term, String)
 data Type = TypeVar Var
           | TypeArr Type Type
           | Untypeable
-            deriving ( Eq, Show )
+            deriving ( Eq )
+
+instance Show Type where
+    show (TypeVar v) = v
+    show (TypeArr (TypeVar v) t) = v ^-^ " → " ^-^ t
+    show (TypeArr t1 t2) = "(" ^-^ t1 ^-^ ") → " ^-^ t2
+    show Untypeable = "Untypeable"
 
 -- | Run the LC program in the given file and return the bound names
 -- and the sequences of steps that in the evaluations of the calls
