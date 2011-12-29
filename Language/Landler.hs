@@ -19,7 +19,9 @@ module Language.Landler (
     ) where
 
 import Control.Monad ( when )
+import Data.Char ( toLower, toUpper )
 import qualified Data.Set as S
+import qualified Data.Map as M
 import Language.Landler.Parser
 import System.FilePath ( replaceBaseName )
 import Text.Interpol ( (^-^) )
@@ -54,7 +56,9 @@ instance Show Result where
 -- that can be applied to it.
 type Step = (Term, String)
 
-data Type = Untypeable
+data Type = TypeVar Var
+          | TypeArr Type Type
+          | Untypeable
             deriving ( Eq, Show )
 
 -- | Run the LC program in the given file and return the bound names
@@ -72,8 +76,27 @@ run fn = do
 -- | Determine the type for the given term, taking into account the
 -- given environment.
 typ3 :: (ReadTerm t, Monad m) => Environment -> t -> m Type
-typ3 _ _ = do
-  return Untypeable
+typ3 _ rt = do
+  t <- toTerm rt
+  return . fst $ go M.empty t
+    where
+      go env (Var v)  = let t' = fresh env
+                        in case M.lookup v env of
+                             Nothing -> (t', M.insert v t' env)
+                             Just t  -> (t, env)
+      go env (Ab v t) = let t1 = fresh env
+                            env' = M.insert v t1 env
+                            (t2, env'') = go env' t
+                        in (TypeArr t1 t2, M.delete v env'')
+      go env _        = (Untypeable, env)
+
+      fresh :: M.Map Var Type -> Type
+      fresh env = let usedTypes = map (map toLower) .
+                                  concatMap fromTypeVar $ M.elems env
+                  in TypeVar . map toUpper . newVar $ S.fromList usedTypes
+
+      fromTypeVar (TypeVar v) = [v]
+      fromTypeVar _           = []
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
