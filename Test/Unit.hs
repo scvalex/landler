@@ -7,6 +7,7 @@ import Data.Maybe
 import Language.Landler
 import System.Exit ( exitFailure )
 import Test.HUnit
+import Text.Interpol
 
 main :: IO ()
 main = do
@@ -61,13 +62,13 @@ negativeTermParses =
 
 positiveStatementParses :: [(String, String, Statement)]
 positiveStatementParses =
-    [ ("call", "(\\x. y)", Call (Ab "x" (Var "y")))
+    [ ("call", "(\\x. y)", CallS (Ab "x" (Var "y")))
     , ("call2", "(\\x. y \\z. y)",
-       Call (Ab "x" (App (Var "y") (Ab "z" (Var "y")))))
-    , ("let", "let id = (\\x. x)", Let "id" (Ab "x" (Var "x")))
+       CallS (Ab "x" (App (Var "y") (Ab "z" (Var "y")))))
+    , ("let", "let id = (\\x. x)", LetS "id" (Ab "x" (Var "x")))
     , ("let2", "let m = (\\x y z. z y x)",
-       Let "m" (Ab "x" (Ab "y" (Ab "z" (App (App (v "z") (v "y")) (v "x"))))))
-    , ("import", "import prelude", Import "prelude")
+       LetS "m" (Ab "x" (Ab "y" (Ab "z" (App (App (v "z") (v "y")) (v "x"))))))
+    , ("import", "import prelude", ImportS "prelude")
     ]
 
 positiveExampleTests :: [(String, FilePath, [Term])]
@@ -99,7 +100,11 @@ parseTestS text statement = let (Right res) = parseStatement text
 exampleTest :: FilePath -> [Term] -> Test
 exampleTest fp terms = TestCase $ do
                          (_, stepss) <- run fp
-                         assertEqual "" terms (map (fst . last) stepss)
+                         assertEqual "" terms (map (fst . last . fromCallR)
+                                                   stepss)
+    where
+      fromCallR (CallR steps) = steps
+      fromCallR r             = error $ "unexpected result " ^-^ r
 
 negExampleTest :: FilePath -> Test
 negExampleTest fp = TestCase $

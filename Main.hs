@@ -6,7 +6,7 @@ import System.Console.Haskeline ( InputT, runInputT
                                 , Settings(..), defaultSettings
                                 , getInputLine )
 import Language.Landler ( Term, Var
-                        , Step, run, breakDance
+                        , run, breakDance
                         , Statement(..), parseStatement
                         , ParseError(..) )
 import System.Environment ( getArgs )
@@ -22,7 +22,7 @@ main = do
         runInterpreter
     [fn] -> do
          (_, stepss) <- run fn
-         putStrLn $ concatMap prettyPrint stepss
+         putStrLn $ concatMap show stepss
     _ ->
         error "FIXME Use cmdargs or something."
 
@@ -54,13 +54,15 @@ runInterpreter = printBanner >> runInputT settings (loop [])
               return env
             Right stmt -> do
               case stmt of
-                Let v t   -> return $ (v, t) : env
-                Call t    -> liftIO (putStrLn . prettyPrint . fromJust $
+                LetS v t   -> return $ (v, t) : env
+                CallS t    -> liftIO (putStrLn . show . fromJust $
                                      breakDance env t) >>
-                             return env
-                Import _  -> liftIO $ putStrLn "import handling not \
+                              return env
+                ImportS _  -> liftIO $ putStrLn "import handling not \
                                                \implemented" >>
-                             return env
+                              return env
+                TypeS _    -> liftIO $ putStrLn "typing not implemented" >>
+                              return env
 
       reportError :: ParseError -> Int -> IO ()
       reportError err@(ParseError line col _) plen = do
@@ -68,9 +70,3 @@ runInterpreter = printBanner >> runInputT settings (loop [])
           then putStrLn $ (replicate (plen + col - 1) ' ') ^-^ "^ here"
           else return ()
         putStrLn $ "Encountered error " ^-^ err
-
-prettyPrint :: [Step] -> String
-prettyPrint = unlines . go
-    where
-      go []            = ["---"]
-      go ((t, s) : ts) = (show t) : ("\t" ^-^ s) : go ts

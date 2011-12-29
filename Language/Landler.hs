@@ -2,7 +2,7 @@
 
 module Language.Landler (
         -- * Types
-        Statement(..), Environment, Step, Term(..), Var,
+        Statement(..), Environment, Result(..), Step, Term(..), Var,
 
         -- * Reading
         parseProgram, parseStatement, parseTerm, ReadTerm(..),
@@ -10,6 +10,9 @@ module Language.Landler (
 
         -- * Reductions
         run, breakDance, dance, sideStep, step,
+
+        -- * Typing
+        typ3,
 
         -- * Utilities
         subst, freeVariables, boundVariables
@@ -36,18 +39,41 @@ instance ReadTerm String where
 -- | An 'Environment' maps names to the terms they represent.
 type Environment = [(Var, Term)]
 
+-- | The result of executing a 'Statement'.
+data Result = CallR [Step]
+            | TypeR Type
+
+instance Show Result where
+    show (CallR steps) = unlines $ go steps
+        where
+          go []            = ["---"]
+          go ((t, s) : ts) = (show t) : ("\t" ^-^ s) : go ts
+    show (TypeR typ) = show typ
+
 -- | A 'Step' is a term and a description of the reduction (if any)
 -- that can be applied to it.
 type Step = (Term, String)
 
+data Type = Untypeable
+            deriving ( Eq, Show )
+
 -- | Run the LC program in the given file and return the bound names
 -- and the sequences of steps that in the evaluations of the calls
 -- read.
-run :: FilePath -> IO (Environment, [[Step]])
+run :: FilePath -> IO (Environment, [Result])
 run fn = do
-  (terms, binds) <- parseFileResolveImports [] fn
-  stepss <- mapM (breakDance binds) terms
-  return (binds, stepss)
+  Module { getModuleCalls = calls
+         , getModuleLets  = lets
+         , getModuleTypes = types } <- parseModuleResolveImports [] fn
+  callResults <- mapM (breakDance lets) calls
+  typeResults <- mapM (typ3 lets) types
+  return (lets, map CallR callResults ++ map TypeR typeResults)
+
+-- | Determine the type for the given term, taking into account the
+-- given environment.
+typ3 :: (ReadTerm t, Monad m) => Environment -> t -> m Type
+typ3 _ _ = do
+  return Untypeable
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
@@ -142,26 +168,30 @@ allVars = let vs = "" : [v ++ [s] | v <- vs, s <- ['a'..'z']]
 newVar :: S.Set Var -> Var
 newVar usedVariables = head $ dropWhile (flip S.member usedVariables) allVars
 
--- | Parse the specified file and resolve any imports it may have by
--- parsing and resolving those files as well.  Return a pair
--- containing the list of terms read and the list of bindings found.
+-- | Parse the specified module and resolve any imports it may have by
+-- parsing and resolving those modules as well.  Return a 'Module'
+-- with the meta-data corresponding to the target module, the various
+-- content entries expanded as necessary and the import list empty.
 -- Terms and bindings from imported modules appear before terms and
 -- bindings from the importing modules.
-parseFileResolveImports :: [FilePath] -- ^ List of files already
-                                      -- loaded.  If a cycle is
-                                      -- detected, fail.
-                        -> FilePath
-                        -> IO ([Term], [(Var, Term)])
-parseFileResolveImports fns fn = do
+parseModuleResolveImports :: [FilePath] -- ^ List of files already
+                                        -- loaded.  If a cycle is
+                                        -- detected, fail.
+                          -> FilePath
+                          -> IO Module
+parseModuleResolveImports fns fn = do
   when (fn `elem` fns) . fail $ "import cycle detected: " ^-^ fns
   m <- parseModule fn
-  resolves <- mapM (parseFileResolveImports (fn:fns) . findModule fn)
-                   (getModuleImports m)
-  let (extraTerms, extraBinds) =
-          foldl (\(ets, ebs) (ts, bs) -> (ets ++ ts, ebs ++ bs))
-                ([], []) resolves
-  return ( extraTerms ++ (getModuleTerms m)
-         , extraBinds ++ (getModuleBindings m))
+  resolvedMs <- mapM (parseModuleResolveImports (fn:fns) . findModule fn)
+                     (getModuleImports m)
+  let m' = foldl (\mt m1 -> extendModule mt m1)
+                 m resolvedMs
+  return m' { getModuleImports = [] }
     where
       findModule :: FilePath -> String -> FilePath
       findModule = replaceBaseName
+
+      extendModule mt m1 =
+          mt { getModuleLets  = getModuleLets m1 ++ getModuleLets mt
+             , getModuleCalls = getModuleCalls m1 ++ getModuleCalls mt
+             , getModuleTypes = getModuleTypes m1 ++ getModuleTypes mt }

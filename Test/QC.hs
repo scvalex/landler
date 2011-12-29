@@ -23,8 +23,8 @@ instance Arbitrary Statement where
     arbitrary = choose (0, 1) >>= go
         where
           go :: Int -> Gen Statement
-          go 0 = Let <$> name <*> arbitrary
-          go _ = Call <$> arbitrary
+          go 0 = LetS <$> name <*> arbitrary
+          go _ = CallS <$> arbitrary
 
 main :: IO ()
 main = do

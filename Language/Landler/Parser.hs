@@ -30,17 +30,27 @@ import Text.Parsec.Token ( GenLanguageDef(..), LanguageDef
 -- @_@ and subesequent characters may be letters, numbers and @_@.
 type Var = String
 
--- | Statements are either @let <var> = (<term>)@ which binds the term
--- to the variable name or @(<term>)@ which evaluates the term and
--- prints out the result.  These are meta-syntactic constructs; they
--- are not part of the lambda-calculus.
-data Statement = Let Var Term | Call Term | Import String
+-- | Statements are one of:
+--
+--   [@let <var> = (<term>)@] binds the term to the variable name;
+--
+--   [@(<term>)@] evaluates the term and prints out the result;
+--
+--   [@import <module>@] brings all lets in the given module into
+--   scope and evaluates any free terms in order; or
+--
+--   [@type (<term>)@] prints the derivied type for the term.
+--
+--  These are meta-syntactic constructs; they are not part of the
+--  lambda-calculus.
+data Statement = LetS Var Term | CallS Term | ImportS String | TypeS Term
                  deriving ( Eq )
 
 instance Show Statement where
-    show (Let v t)   = "let " ^-^ v ^-^ " = (" ^-^ t ^-^ ")"
-    show (Call t)    = "(" ^-^ t ^-^ ")"
-    show (Import mn) = "import " ^-^ mn
+    show (LetS v t)   = "let " ^-^ v ^-^ " = (" ^-^ t ^-^ ")"
+    show (CallS t)    = "(" ^-^ t ^-^ ")"
+    show (ImportS mn) = "import " ^-^ mn
+    show (TypeS t)    = "type " ^-^ t
 
 -- | Lambda-calculus terms are variables, abstractions or
 -- applications.
@@ -81,8 +91,9 @@ instance Show ParseError where
 data Module = Module { getModuleName :: String
                      , getModulePath :: FilePath
                      , getModuleImports :: [String]
-                     , getModuleBindings :: [(Var, Term)]
-                     , getModuleTerms :: [Term]
+                     , getModuleLets :: [(Var, Term)]
+                     , getModuleCalls :: [Term]
+                     , getModuleTypes :: [Term]
                      } deriving ( Show )
 
 ----------------------------------------------------------------------
@@ -114,11 +125,12 @@ program :: LParser [Statement]
 program = many1 statement <* eof
 
 statement :: LParser Statement
-statement = ws >> (letS <|> importS <|> callS)
+statement = ws >> (letS <|> importS <|> callS <|> typeS)
     where
-      letS = Let <$> (llet *> lvar) <*> (leq *> lparens term)
-      importS = Import <$> (limport *> lvar)
-      callS = Call <$> lparens term
+      letS = LetS <$> (llet *> lvar) <*> (leq *> lparens term)
+      importS = ImportS <$> (limport *> lvar)
+      callS = CallS <$> lparens term
+      typeS = TypeS <$> (ltype *> lparens term)
 
 term :: LParser Term
 term = do
@@ -171,11 +183,12 @@ lvar = identifier lexer
 lparens :: LParser a -> LParser a
 lparens = parens lexer
 
-ldot, llambda, llet, limport, leq, ws :: LParser ()
+ldot, llambda, llet, limport, ltype, leq, ws :: LParser ()
 ldot = (reservedOp lexer) "."
 llambda = (reservedOp lexer) "\\"
 llet = (reserved lexer) "let"
 limport = (reserved lexer) "import"
+ltype = (reserved lexer) "type"
 leq = (reservedOp lexer) "="
 ws = whiteSpace lexer
 
@@ -195,15 +208,21 @@ mkParseError err = ParseError (sourceLine $ errorPos err)
 -- etc. and return a 'Module' structure.
 mkModule :: FilePath -> [Statement] -> Module
 mkModule fp stmts =
-    let (is, bs, ts) = foldr (\s (is1, bs1, ts1) ->
-                                  case s of
-                                    Let v t -> (is1, (v, t) : bs1, ts1)
-                                    Call t  -> (is1, bs1, t : ts1)
-                                    Import mn -> (mn : is1, bs1, ts1))
-                             ([], [], []) stmts
-    in Module { getModuleName = takeFileName fp
-              , getModulePath = fp
-              , getModuleImports = is
-              , getModuleBindings = bs
-              , getModuleTerms = ts
-              }
+    let m = Module { getModuleName    = takeFileName fp
+                   , getModulePath    = fp
+                   , getModuleImports = []
+                   , getModuleLets    = []
+                   , getModuleCalls   = []
+                   , getModuleTypes   = []
+                   }
+    in foldr (\s m' -> case s of
+                         LetS v t ->
+                             m' { getModuleLets = (v, t) : getModuleLets m' }
+                         CallS t ->
+                             m' { getModuleCalls = t : getModuleCalls m' }
+                         ImportS mn ->
+                             m' { getModuleImports =
+                                      mn : getModuleImports m' }
+                         TypeS t ->
+                             m' { getModuleTypes = t : getModuleTypes m' })
+             m stmts
