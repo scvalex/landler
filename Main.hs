@@ -1,12 +1,12 @@
 module Main where
 
-import Control.Monad.IO.Class ( liftIO )
+import Control.Monad.IO.Class ( MonadIO(..) )
 import Data.Maybe ( fromJust )
 import System.Console.Haskeline ( InputT, runInputT
                                 , Settings(..), defaultSettings
                                 , getInputLine )
 import Language.Landler ( Term, Var
-                        , run, breakDance
+                        , run, breakDance, typ3
                         , Statement(..), parseStatement
                         , ParseError(..) )
 import System.Environment ( getArgs )
@@ -50,19 +50,18 @@ runInterpreter = printBanner >> runInputT settings (loop [])
       handleStatement env plen str =
           case parseStatement str of
             Left err -> do
-              liftIO $ reportError err plen
+              io $ reportError err plen
               return env
             Right stmt -> do
               case stmt of
                 LetS v t   -> return $ (v, t) : env
-                CallS t    -> liftIO (putStrLn . show . fromJust $
-                                     breakDance env t) >>
+                CallS t    -> io (print . fromJust $ breakDance env t) >>
                               return env
-                ImportS _  -> liftIO $ putStrLn "import handling not \
-                                               \implemented" >>
+                ImportS _  -> io $ putStrLn "import handling not \
+                                            \implemented" >>
                               return env
-                TypeS _    -> liftIO $ putStrLn "typing not implemented" >>
-                              return env
+                TypeS t -> io (print . fromJust $ typ3 env t) >>
+                           return env
 
       reportError :: ParseError -> Int -> IO ()
       reportError err@(ParseError line col _) plen = do
@@ -70,3 +69,6 @@ runInterpreter = printBanner >> runInputT settings (loop [])
           then putStrLn $ (replicate (plen + col - 1) ' ') ^-^ "^ here"
           else return ()
         putStrLn $ "Encountered error " ^-^ err
+
+io :: (MonadIO m) => IO a -> m a
+io = liftIO
