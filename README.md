@@ -44,8 +44,8 @@ without any arguments:
 
     % landler
     landler, version <VERSION>: https://github.com/scvalex/landler  :? for help
-    ∅ > (\x. x) y
-    [(\x. x,"stuck: top-level is not an application")]
+    ∅ > ((\x. x) y)
+    [((\x. x) y,"subst"),(y,"stuck: top-level is not an application")]
     ∅ > type (\x y. x)
     b → c → b
 
