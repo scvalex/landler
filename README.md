@@ -70,3 +70,5 @@ To install:
 To run the tests (both unit and quickcheck):
 
     % make test
+
+Note that most of these just invoke `cabal` behind the scenes.
