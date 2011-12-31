@@ -1,5 +1,8 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Main where
 
+import qualified Control.Exception as CE
 import Control.Monad.IO.Class ( MonadIO(..) )
 import Data.Maybe ( fromJust )
 import System.Console.Haskeline ( InputT, runInputT
@@ -8,7 +11,7 @@ import System.Console.Haskeline ( InputT, runInputT
 import Language.Landler ( Term, Var
                         , run, breakDance, typ3
                         , Statement(..), parseStatement
-                        , ParseError(..) )
+                        , Error(..), ParseError(..) )
 import System.Environment ( getArgs )
 import Text.Interpol ( (^-^) )
 
@@ -60,7 +63,8 @@ runInterpreter = printBanner >> runInputT settings (loop [])
                 ImportS _  -> io $ putStrLn "import handling not \
                                             \implemented" >>
                               return env
-                TypeS t -> io (print . fromJust $ typ3 env t) >>
+                TypeS t -> io (CE.handle (\(e :: Error) -> print e) $
+                               print . fromJust $ typ3 env t) >>
                            return env
 
       reportError :: ParseError -> Int -> IO ()

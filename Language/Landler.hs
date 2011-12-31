@@ -1,8 +1,11 @@
-{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances #-}
+{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, DeriveDataTypeable #-}
 
 module Language.Landler (
         -- * Types
         Statement(..), Environment, Result(..), Step, Term(..), Var,
+
+        -- * Errors
+        Error(..),
 
         -- * Reading
         parseProgram, parseStatement, parseTerm, ReadTerm(..),
@@ -18,8 +21,11 @@ module Language.Landler (
         subst, freeVariables, boundVariables
     ) where
 
+import qualified Control.Exception as CE
 import Control.Monad ( when )
 import Data.Char ( toLower, toUpper )
+import Data.Maybe ( fromJust )
+import Data.Typeable ( Typeable )
 import qualified Data.Set as S
 import qualified Data.Map as M
 import Language.Landler.Parser
@@ -58,14 +64,23 @@ type Step = (Term, String)
 
 data Type = TypeVar Var
           | TypeArr Type Type
-          | Untypeable
             deriving ( Eq )
 
 instance Show Type where
     show (TypeVar v) = v
     show (TypeArr (TypeVar v) t) = v ^-^ " → " ^-^ t
     show (TypeArr t1 t2) = "(" ^-^ t1 ^-^ ") → " ^-^ t2
-    show Untypeable = "Untypeable"
+
+type Context = M.Map Var Type
+
+-- | A 'Substitution' is a function that transforms one type into
+-- another.
+type Substitution = Type -> Type
+
+data Error = TypeError String
+             deriving ( Show, Typeable )
+
+instance CE.Exception Error
 
 -- | Run the LC program in the given file and return the bound names
 -- and the sequences of steps that in the evaluations of the calls
@@ -84,22 +99,59 @@ run fn = do
 typ3 :: (ReadTerm t, Monad m) => Environment -> t -> m Type
 typ3 _ rt = do
   t <- toTerm rt
-  return . fst $ go M.empty t
+  return . snd $ go (mkContext t M.empty) t
     where
-      go env (Var v)  = let t' = fresh env
-                        in case M.lookup v env of
-                             Nothing -> (t', M.insert v t' env)
-                             Just t  -> (t, env)
-      go env (Ab v t) = let t1 = fresh env
-                            env' = M.insert v t1 env
-                            (t2, env'') = go env' t
-                        in (TypeArr t1 t2, M.delete v env'')
-      go env _        = (Untypeable, env)
+      mkContext :: Term -> Context -> Context
+      mkContext (Var v) cxt = case M.lookup v cxt of
+                                    Nothing -> M.insert v (fresh cxt) cxt
+                                    Just _  -> cxt
+      mkContext (App t1 t2) cxt = mkContext t1 $ mkContext t2 cxt
+      mkContext (Ab _ t) cxt = mkContext t cxt
+
+      go :: Context -> Term -> (Substitution, Type)
+      go cxt (Var v)  = (id, fromJust $ M.lookup v cxt)
+      go cxt (Ab v t) = let t1 = fresh cxt
+                            (s, t2) = go (M.insert v t1 cxt) t
+                        in (s, s (TypeArr t1 t2))
+      go cxt (App m n) = let t1 = fresh cxt
+                             (s3, t3) = go cxt m
+                             (s2, t2) = go (contextSubstitution s3 cxt) n
+                             s1 = unifyTypes (s2 t3) (TypeArr t2 t1)
+                         in (s1 . s2 . s3, s1 t1)
+
+      -- | Robinson's unification algorithm:
+      unifyTypes :: Type -> Type -> Substitution
+      unifyTypes t1@(TypeVar v1) t2
+            | t1 == t2  = id
+            | otherwise = occursCheck t1 t2 $ replaceType v1 t2
+      unifyTypes t1 t2@(TypeVar _) = unifyTypes t2 t1
+      unifyTypes (TypeArr a b) (TypeArr c d) =
+          let s1 = unifyTypes a c
+              s2 = unifyTypes (s1 b) (s1 d)
+          in s2 . s1
 
       fresh :: M.Map Var Type -> Type
-      fresh env = let usedTypes = map (map toLower) .
-                                  concatMap fromTypeVar $ M.elems env
+      fresh cxt = let usedTypes = map (map toLower) .
+                                  concatMap fromTypeVar $ M.elems cxt
                   in TypeVar . map toUpper . newVar $ S.fromList usedTypes
+
+      contextSubstitution :: Substitution -> Context -> Context
+      contextSubstitution s = M.map s
+
+      occursCheck :: Type -> Type -> a -> a
+      occursCheck t1 (TypeArr t2 t3) x = occursCheck t1 t2 $
+                                         occursCheck t1 t3 $ x
+      occursCheck t1 t2 x
+            | t1 == t2  = CE.throw (occursCheckFailed t1 t2)
+            | otherwise = x
+
+
+      replaceType :: Var -> Type -> Type -> Type
+      replaceType v1 t2 t3@(TypeVar v) = if v == v1 then t2 else t3
+      replaceType _  _  t3             = t3
+
+      occursCheckFailed t1 t2 = TypeError $ "Occurs check failed:\n\t" ^-^
+                                            t1 ^-^ "\nin\n\t" ^-^ t2
 
       fromTypeVar (TypeVar v) = [v]
       fromTypeVar _           = []
