@@ -25,6 +25,7 @@ module Language.Landler (
 import qualified Control.Exception as CE
 import Control.Monad ( when )
 import Control.Monad.State ( MonadState(..), State, evalState )
+import Data.Char ( toUpper )
 import Data.Maybe ( fromJust )
 import Data.Typeable ( Typeable )
 import qualified Data.Set as S
@@ -68,9 +69,11 @@ data Type = TypeVar Var
             deriving ( Eq )
 
 instance Show Type where
-    show (TypeVar v) = v
-    show (TypeArr (TypeVar v) t) = v ^-^ " → " ^-^ t
-    show (TypeArr t1 t2) = "(" ^-^ t1 ^-^ ") → " ^-^ t2
+    show = go . canonicalForm
+        where
+          go (TypeVar v) = v
+          go (TypeArr (TypeVar v) t) = v ^-^ " → " ^-^ go t
+          go (TypeArr t1 t2) = "(" ^-^ go t1 ^-^ ") → " ^-^ go t2
 
 type Context = M.Map Var Type
 
@@ -170,6 +173,26 @@ typ3 _ rt = do
 
       occursCheckFailed t1 t2 = TypeError $ "Occurs check failed:\n\t" ^-^
                                             t1 ^-^ "\nin\n\t" ^-^ t2
+
+-- | Rename the 'TypeVar's in a 'Type' to a more *humane* order.  For
+-- instance, turn @B -> C -> A@ into @A -> B -> C@.  Also, capitalize
+-- variable names.
+canonicalForm :: Type -> Type
+canonicalForm t = let (cf, _, _) = go allVars M.empty t
+                  in cf
+    where
+      go (v:vs) rcxt (TypeVar v1) =
+          case M.lookup v1 rcxt of
+            Nothing -> (TypeVar (capitalize v), M.insert v1 v rcxt, vs)
+            Just v2 -> (TypeVar (capitalize v2), rcxt, v:vs)
+      go vs rcxt (TypeArr t1 t2) =
+          let (t1', rcxt', vs') = go vs rcxt t1
+              (t2', rcxt'', vs'') = go vs' rcxt' t2
+          in (TypeArr t1' t2', rcxt'', vs'')
+      go _ _ _ = error "cannot happen"
+
+      capitalize (c:cs) = toUpper c : cs
+      capitalize []     = []
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
