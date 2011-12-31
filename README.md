@@ -38,3 +38,35 @@ the library and includes some extra features such as let-bindings:
     (\x. id (x x)) (\x. id (x x))
 	    cycling
     ---
+
+The `landler` CLI program can also be used as a REPL; just run it
+without any arguments:
+
+    % landler
+    landler, version <VERSION>: https://github.com/scvalex/landler  :? for help
+    ∅ > (\x. x) y
+    [(\x. x,"stuck: top-level is not an application")]
+    ∅ > type (\x y. x)
+    b → c → b
+
+Development
+-----------
+
+Development is `Makefile`-driven™.  That is, I run everything through
+the `Makefile`.
+
+To build landler, run:
+
+    % make
+
+To build the documentation, run:
+
+    % make doc
+
+To install:
+
+    % make install
+
+To run the tests (both unit and quickcheck):
+
+    % make test
