@@ -1,4 +1,5 @@
-{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, DeriveDataTypeable #-}
+{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, DeriveDataTypeable,
+             FlexibleInstances, MultiParamTypeClasses #-}
 
 module Language.Landler (
         -- * Types
@@ -23,7 +24,7 @@ module Language.Landler (
 
 import qualified Control.Exception as CE
 import Control.Monad ( when )
-import Data.Char ( toLower, toUpper )
+import Control.Monad.State ( MonadState(..), State, evalState )
 import Data.Maybe ( fromJust )
 import Data.Typeable ( Typeable )
 import qualified Data.Set as S
@@ -77,10 +78,27 @@ type Context = M.Map Var Type
 -- another.
 type Substitution = Type -> Type
 
+-- | The kinds of errors landler throws.  Also have a look at
+-- 'ParseError'.
 data Error = TypeError String
              deriving ( Show, Typeable )
 
 instance CE.Exception Error
+
+-- | A monad for fresh variables.  See 'fresh'.
+type Fresh = State [Var]
+
+-- | Get a fresh variable name.  This variable name is guaranteed to
+-- be new.
+fresh :: Fresh Var
+fresh = do
+  (v:vs) <- get
+  put vs
+  return v
+
+-- | Run the 'Fresh' monad.
+runFresh :: Fresh a -> a
+runFresh f = evalState f allVars
 
 -- | Run the LC program in the given file and return the bound names
 -- and the sequences of steps that in the evaluations of the calls
@@ -99,25 +117,29 @@ run fn = do
 typ3 :: (ReadTerm t, Monad m) => Environment -> t -> m Type
 typ3 _ rt = do
   t <- toTerm rt
-  return . snd $ go (mkContext t M.empty) t
+  return . snd $ runFresh (mkContext t M.empty >>= go t)
     where
-      mkContext :: Term -> Context -> Context
+      mkContext :: Term -> Context -> Fresh Context
       mkContext (Var v) cxt = case M.lookup v cxt of
-                                    Nothing -> M.insert v (fresh cxt) cxt
-                                    Just _  -> cxt
-      mkContext (App t1 t2) cxt = mkContext t1 $ mkContext t2 cxt
+                                    Nothing -> do
+                                      t <- fresh
+                                      return $ M.insert v (TypeVar t) cxt
+                                    Just _  -> return cxt
+      mkContext (App t1 t2) cxt = mkContext t1 cxt >>= mkContext t2
       mkContext (Ab _ t) cxt = mkContext t cxt
 
-      go :: Context -> Term -> (Substitution, Type)
-      go cxt (Var v)  = (id, fromJust $ M.lookup v cxt)
-      go cxt (Ab v t) = let t1 = fresh cxt
-                            (s, t2) = go (M.insert v t1 cxt) t
-                        in (s, s (TypeArr t1 t2))
-      go cxt (App m n) = let t1 = fresh cxt
-                             (s3, t3) = go cxt m
-                             (s2, t2) = go (contextSubstitution s3 cxt) n
-                             s1 = unifyTypes (s2 t3) (TypeArr t2 t1)
-                         in (s1 . s2 . s3, s1 t1)
+      go :: Term -> Context -> Fresh (Substitution, Type)
+      go (Var v) cxt   = return (id, fromJust $ M.lookup v cxt)
+      go (Ab v t) cxt  = do
+              t1 <- fresh
+              (s, t2) <- go t (M.insert v (TypeVar t1) cxt)
+              return (s, s (TypeArr (TypeVar t1) t2))
+      go (App m n) cxt = do
+              t1 <- fresh
+              (s3, t3) <- go m cxt
+              (s2, t2) <- go n (contextSubstitution s3 cxt)
+              let s1 = unifyTypes (s2 t3) (TypeArr t2 (TypeVar t1))
+              return (s1 . s2 . s3, s1 (TypeVar t1))
 
       -- | Robinson's unification algorithm:
       unifyTypes :: Type -> Type -> Substitution
@@ -129,11 +151,6 @@ typ3 _ rt = do
           let s1 = unifyTypes a c
               s2 = unifyTypes (s1 b) (s1 d)
           in s2 . s1
-
-      fresh :: M.Map Var Type -> Type
-      fresh cxt = let usedTypes = map (map toLower) .
-                                  concatMap fromTypeVar $ M.elems cxt
-                  in TypeVar . map toUpper . newVar $ S.fromList usedTypes
 
       contextSubstitution :: Substitution -> Context -> Context
       contextSubstitution s = M.map s
@@ -148,13 +165,11 @@ typ3 _ rt = do
 
       replaceType :: Var -> Type -> Type -> Type
       replaceType v1 t2 t3@(TypeVar v) = if v == v1 then t2 else t3
-      replaceType _  _  t3             = t3
+      replaceType v1 t2 (TypeArr t3 t4) = TypeArr (replaceType v1 t2 t3)
+                                                  (replaceType v1 t2 t4)
 
       occursCheckFailed t1 t2 = TypeError $ "Occurs check failed:\n\t" ^-^
                                             t1 ^-^ "\nin\n\t" ^-^ t2
-
-      fromTypeVar (TypeVar v) = [v]
-      fromTypeVar _           = []
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
