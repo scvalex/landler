@@ -3,7 +3,6 @@
 module Main where
 
 import qualified Control.Exception as CE
-import Data.Maybe
 import Language.Landler
 import System.Exit ( exitFailure )
 import Test.HUnit
@@ -109,13 +108,15 @@ positiveTypeTests =
     ]
 
 parseTest :: String -> Term -> Test
-parseTest text term = TestCase $ assertEqual "" term (fromJust $ toTerm text)
+parseTest text term = TestCase $ assertEqual "" term (toTerm text)
 
 negParseTest :: String -> Test
-negParseTest text = TestCase $ assertEqual "" Nothing (toTerm text)
+negParseTest text = TestCase $ CE.handle (\(_ :: Error) -> return ()) $ do
+                      let t = toTerm text
+                      t `seq` assertFailure ""
 
 parseTestS :: String -> Statement -> Test
-parseTestS text statement = let (Right res) = parseStatement text
+parseTestS text statement = let res = parseStatement text
                             in TestCase $ assertEqual "" statement res
 
 exampleTest :: FilePath -> [Term] -> Test
@@ -134,7 +135,7 @@ negExampleTest fp = TestCase $
 
 typeTest :: String -> Type -> Test
 typeTest rt ty = TestCase $ do
-                   ty1 <- principalType [] rt
+                   let ty1 = principalType [] rt
                    assertEqual "" (canonicalForm ty) (canonicalForm ty1)
 
 v :: String -> Term
