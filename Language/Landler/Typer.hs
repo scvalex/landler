@@ -28,10 +28,9 @@ type Substitution = Type -> Type
 
 -- | Determine the type for the given term, taking into account the
 -- given environment.
-principalType :: (ReadTerm t, Monad m) => Environment -> t -> m Type
-principalType _ rt = do
-  t <- toTerm rt
-  return . snd $ runFresh (mkContext t M.empty >>= go t)
+principalType :: (ReadTerm t) => Environment -> t -> Type
+principalType _ rt = let t = toTerm rt
+                     in snd $ runFresh (mkContext t M.empty >>= go t)
     where
       mkContext :: Term -> Context -> Fresh Context
       mkContext (Var v) cxt = case M.lookup v cxt of

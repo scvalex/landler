@@ -1,18 +1,16 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleContexts, TypeSynonymInstances #-}
 
 module Language.Landler.Parser (
-        ReadTerm(..), ParseError(..),
+        ReadTerm(..),
         parseModule, parseStatement, parseTerm
     ) where
 
 import Control.Applicative ( (<$>), (<*), (*>), (<*>) )
 import qualified Control.Exception as CE
-import Control.Monad.Error.Class ( MonadError(..), Error(..) )
 import Data.Functor.Identity ( Identity )
-import Data.Typeable ( Typeable )
-import Language.Landler.Types ( Module(..), Statement(..), Term(..) )
+import Language.Landler.Types ( Module(..), Statement(..), Term(..)
+                              , Error(..) )
 import System.FilePath ( takeFileName )
-import Text.Interpol ( (^-^) )
 import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>), eof
                    , sourceLine, sourceColumn, errorPos )
 import qualified Text.Parsec as P
@@ -26,36 +24,17 @@ import Text.Parsec.Token ( GenLanguageDef(..), LanguageDef
 -- Types
 ----------------------------------------------------------------------
 
--- | Represents a landler parser error (duh).  It is a thin wrapper
--- around Parsec's @ParseError@.  This exists because we do not want
--- modules above this parser to depend on Parsec.
-data ParseError = ParseError Int    -- ^ Line number
-                             Int    -- ^ Column number
-                             String -- ^ Insightful message
-                  deriving ( Eq, Typeable )
-
-instance CE.Exception ParseError
-
-instance Error ParseError where
-    strMsg = ParseError 0 0
-
-instance Show ParseError where
-    show (ParseError line col msg) =
-        let msgs = filter (not . null) $ lines msg
-            msg' = unlines $ map ("    " ^-^) msgs
-        in "" ^-^ line ^-^ ":" ^-^ col ^-^ ":\n" ^-^ msg'
-
--- | Type-class for things that can be turned into 'Term's.
+-- | Type-class for things that can be turned into 'Term's.  Note
+-- that, as currently defined, 'toTerm' may throw 'ParseError'
+-- exceptions.
 class ReadTerm t where
-    toTerm :: (Monad m) => t -> m Term
+    toTerm :: t -> Term
 
 instance ReadTerm Term where
-    toTerm = return
+    toTerm = id
 
 instance ReadTerm String where
-    toTerm str = case parseTerm str of
-                   Left err -> fail ("error " ^-^ err)
-                   Right t  -> return t
+    toTerm = parseTerm
 
 ----------------------------------------------------------------------
 -- Parser
@@ -68,16 +47,16 @@ parseModule fn = do
     Left err -> CE.throw (mkParseError err)
     Right ss -> return $ mkModule fn ss
 
-parseStatement :: (MonadError ParseError m) => String -> m Statement
+parseStatement :: String -> Statement
 parseStatement text = handleResult (parse statement "input" text)
 
-parseTerm :: (MonadError ParseError m) => String -> m Term
+parseTerm :: String -> Term
 parseTerm text = handleResult (parse term "input" text)
 
-handleResult :: (MonadError ParseError m) => Either P.ParseError t -> m t
+handleResult :: Either P.ParseError t -> t
 handleResult res = case res of
-                     Left err -> throwError (mkParseError err)
-                     Right t  -> return t
+                     Left err -> CE.throw (mkParseError err)
+                     Right t  -> t
 
 program :: LParser [Statement]
 program = many1 statement <* eof
@@ -155,7 +134,7 @@ ws = whiteSpace lexer
 ----------------------------------------------------------------------
 
 -- | Convert a Parsec @ParseError@ into the equivalent 'ParseError'.
-mkParseError :: P.ParseError -> ParseError
+mkParseError :: P.ParseError -> Error
 mkParseError err = ParseError (sourceLine $ errorPos err)
                               (sourceColumn $ errorPos err)
                               (showErrorMessages "or" "unknown" "expecting"

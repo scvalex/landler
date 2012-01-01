@@ -94,12 +94,22 @@ instance Show Type where
           go (TypeArr (TypeVar v) t) = v ^-^ " → " ^-^ go t
           go (TypeArr t1 t2) = "(" ^-^ go t1 ^-^ ") → " ^-^ go t2
 
--- | The kinds of errors landler throws.  Also have a look at
--- 'ParseError'.
+-- | The kinds of errors landler throws.
 data Error = TypeError String
-             deriving ( Show, Typeable )
+           | ParseError Int         -- ^ Line number
+                        Int         -- ^ Column number
+                        String      -- ^ Insightful message
+             deriving ( Typeable )
 
 instance CE.Exception Error
+
+instance Show Error where
+    show (TypeError msg) = "Type error: " ^-^ msg
+    show (ParseError line col msg) =
+        let msgs = filter (not . null) $ lines msg
+            msg' = unlines $ map ("    " ^-^) msgs
+        in "" ^-^ line ^-^ ":" ^-^ col ^-^ ":\n" ^-^ msg'
+
 
 -- | Rename the 'TypeVar's in a 'Type' to a more *humane* order.  For
 -- instance, turn @B -> C -> A@ into @A -> B -> C@.

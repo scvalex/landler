@@ -7,7 +7,6 @@ module Language.Landler (
 
         -- * Reading
         parseStatement, parseTerm, ReadTerm(..),
-        ParseError(..),
 
         -- * Reductions
         run, breakDance, dance, sideStep, step,
@@ -22,8 +21,7 @@ module Language.Landler (
 import Control.Monad ( when )
 import qualified Data.Set as S
 import Language.Landler.Parser ( parseStatement, parseModule
-                               , ReadTerm(..), parseTerm
-                               , ParseError(..) )
+                               , ReadTerm(..), parseTerm )
 import Language.Landler.Typer ( principalType )
 import Language.Landler.Types ( Module(..), Statement(..)
                               , Var, allVars
@@ -41,8 +39,8 @@ run fn = do
   Module { getModuleCalls = calls
          , getModuleLets  = lets
          , getModuleTypes = types } <- parseModuleResolveImports [] fn
-  callResults <- mapM (breakDance lets) calls
-  typeResults <- mapM (principalType lets) types
+  let callResults = map (breakDance lets) calls
+      typeResults = map (principalType lets) types
   return (lets, map CallR callResults ++ map TypeR typeResults)
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
@@ -50,10 +48,9 @@ run fn = do
 -- effectively a version of 'dance' that also uses bound names.  The
 -- only way to cause this function to fail is to pass it a parameter
 -- that cannot be converted to a term.
-breakDance :: (ReadTerm t, Monad m) => Environment -> t -> m [Step]
-breakDance binds rt = do
-  t <- toTerm rt
-  return $ go [t] t
+breakDance :: (ReadTerm t) => Environment -> t -> [Step]
+breakDance binds rt = let t = toTerm rt
+                      in go [t] t
     where
       go soFar t = case sideStep binds t of
                      Left s ->
@@ -66,7 +63,7 @@ breakDance binds rt = do
 -- Return all the intermediary results (including the original term).
 -- The only way to cause this function to fail is to pass it a
 -- parameter that cannot be converted to a term.
-dance :: (ReadTerm t, Monad m) => t -> m [Step]
+dance :: (ReadTerm t) => t -> [Step]
 dance = breakDance []
 
 -- | Perform a one-step call-by-name reduction with bindings.  Return
