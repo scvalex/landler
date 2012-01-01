@@ -25,7 +25,6 @@ module Language.Landler (
 import qualified Control.Exception as CE
 import Control.Monad ( when )
 import Control.Monad.State ( MonadState(..), State, evalState )
-import Data.Char ( toUpper )
 import Data.Maybe ( fromJust )
 import Data.Typeable ( Typeable )
 import qualified Data.Set as S
@@ -175,24 +174,20 @@ typ3 _ rt = do
                                             t1 ^-^ "\nin\n\t" ^-^ t2
 
 -- | Rename the 'TypeVar's in a 'Type' to a more *humane* order.  For
--- instance, turn @B -> C -> A@ into @A -> B -> C@.  Also, capitalize
--- variable names.
+-- instance, turn @B -> C -> A@ into @A -> B -> C@.
 canonicalForm :: Type -> Type
 canonicalForm t = let (cf, _, _) = go allVars M.empty t
                   in cf
     where
       go (v:vs) rcxt (TypeVar v1) =
           case M.lookup v1 rcxt of
-            Nothing -> (TypeVar (capitalize v), M.insert v1 v rcxt, vs)
-            Just v2 -> (TypeVar (capitalize v2), rcxt, v:vs)
+            Nothing -> (TypeVar v, M.insert v1 v rcxt, vs)
+            Just v2 -> (TypeVar v2, rcxt, v:vs)
       go vs rcxt (TypeArr t1 t2) =
           let (t1', rcxt', vs') = go vs rcxt t1
               (t2', rcxt'', vs'') = go vs' rcxt' t2
           in (TypeArr t1' t2', rcxt'', vs'')
       go _ _ _ = error "cannot happen"
-
-      capitalize (c:cs) = toUpper c : cs
-      capitalize []     = []
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
