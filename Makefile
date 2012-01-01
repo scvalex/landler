@@ -6,8 +6,10 @@ build: dist/setup-config
 	cabal build
 
 test: install
-	runhaskell Test/Unit.hs
-	runhaskell Test/QC.hs
+	OK=true &&\
+	{ runhaskell Test/Unit.hs || OK=false ; } &&\
+	{ runhaskell Test/QC.hs || OK=false ; } &&\
+	$$OK
 
 dist: test
 	cabal sdist
