@@ -6,7 +6,7 @@ module Language.Landler (
         Error(..),
 
         -- * Reading
-        parseProgram, parseStatement, parseTerm, ReadTerm(..),
+        parseStatement, parseTerm, ReadTerm(..),
         ParseError(..),
 
         -- * Reductions
@@ -21,7 +21,7 @@ module Language.Landler (
 
 import Control.Monad ( when )
 import qualified Data.Set as S
-import Language.Landler.Parser ( parseProgram, parseStatement, parseModule
+import Language.Landler.Parser ( parseStatement, parseModule
                                , ReadTerm(..), parseTerm
                                , ParseError(..) )
 import Language.Landler.Typer ( principalType )

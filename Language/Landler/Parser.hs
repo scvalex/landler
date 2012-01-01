@@ -2,7 +2,7 @@
 
 module Language.Landler.Parser (
         ReadTerm(..), ParseError(..),
-        parseModule, parseProgram, parseStatement, parseTerm
+        parseModule, parseStatement, parseTerm
     ) where
 
 import Control.Applicative ( (<$>), (<*), (*>), (<*>) )
@@ -67,9 +67,6 @@ parseModule fn = do
   case res of
     Left err -> CE.throw (mkParseError err)
     Right ss -> return $ mkModule fn ss
-
-parseProgram :: (MonadError ParseError m) => String -> m [Statement]
-parseProgram text = handleResult (parse program "input" text)
 
 parseStatement :: (MonadError ParseError m) => String -> m Statement
 parseStatement text = handleResult (parse statement "input" text)
