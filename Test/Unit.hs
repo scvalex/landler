@@ -11,7 +11,7 @@ import Text.Interpol
 
 main :: IO ()
 main = do
-  runCounts <- runTestTT $ test [parseTests, exampleTests]
+  runCounts <- runTestTT $ test [parseTests, exampleTests, typeTests]
   if failures runCounts + errors runCounts == 0
      then
        putStrLn "All tests pass :)"
@@ -32,6 +32,9 @@ exampleTests =
     test . concat $
          [ map (\(n, fp, ts) -> n ~: exampleTest fp ts) positiveExampleTests
          , map (\(n, s) -> n ~: negExampleTest s) negativeExampleTests ]
+
+typeTests :: Test
+typeTests = test $ map (\(n, t, ty) -> n ~: typeTest t ty) positiveTypeTests
 
 positiveTermParses :: [(String, String, Term)]
 positiveTermParses =
@@ -87,6 +90,24 @@ negativeExampleTests =
     , ("import-cycle2", "examples/cycleB.lambda")
     ]
 
+positiveTypeTests :: [(String, String, Type)]
+positiveTypeTests =
+    [ ("type-I", "(\\x. x)", TypeArr (tv "a") (tv "a"))
+    , ("type-K", "(\\x y. x)",
+       TypeArr (tv "a") (TypeArr (tv "b") (tv "a")))
+    , ("type-S", "(\\x y z. x z (y z))",
+       TypeArr (TypeArr (tv "a") (TypeArr (tv "b") (tv "c")))
+               (TypeArr (TypeArr (tv "a") (tv "b"))
+                        (TypeArr (tv "a") (tv "c"))))
+    , ("type-K2", "(\\b c. c)", TypeArr (tv "a") (TypeArr (tv "b") (tv "b")))
+    , ("type-v", "(\\b c. (\\y. c) (b c))",
+       TypeArr (TypeArr (tv "b") (tv "a")) (TypeArr (tv "b") (tv "b")))
+    , ("type-vi", "(\\b c. (\\x y. x) c (b c))",
+       TypeArr (TypeArr (tv "b") (tv "a")) (TypeArr (tv "b") (tv "b")))
+    , ("type-vii", "((\\a b c. a c (b c)) (\\x y. x))",
+       TypeArr (TypeArr (tv "b") (tv "a")) (TypeArr (tv "b") (tv "b")))
+    ]
+
 parseTest :: String -> Term -> Test
 parseTest text term = TestCase $ assertEqual "" term (fromJust $ toTerm text)
 
@@ -111,5 +132,13 @@ negExampleTest fp = TestCase $
                     CE.handle (\(_ :: CE.SomeException) -> return ()) $
                     run fp >> return ()
 
+typeTest :: String -> Type -> Test
+typeTest rt ty = TestCase $ do
+                   ty1 <- principalType [] rt
+                   assertEqual "" (canonicalForm ty) (canonicalForm ty1)
+
 v :: String -> Term
 v x = Var x
+
+tv :: String -> Type
+tv x = TypeVar x

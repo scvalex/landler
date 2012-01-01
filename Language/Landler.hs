@@ -3,7 +3,7 @@
 
 module Language.Landler (
         -- * Types
-        Statement(..), Environment, Result(..), Step, Term(..), Var,
+        Statement(..), Type(..), Environment, Result(..), Step, Term(..), Var,
 
         -- * Errors
         Error(..),
@@ -16,7 +16,7 @@ module Language.Landler (
         run, breakDance, dance, sideStep, step,
 
         -- * Typing
-        typ3,
+        principalType, canonicalForm,
 
         -- * Utilities
         subst, freeVariables, boundVariables
@@ -111,13 +111,13 @@ run fn = do
          , getModuleLets  = lets
          , getModuleTypes = types } <- parseModuleResolveImports [] fn
   callResults <- mapM (breakDance lets) calls
-  typeResults <- mapM (typ3 lets) types
+  typeResults <- mapM (principalType lets) types
   return (lets, map CallR callResults ++ map TypeR typeResults)
 
 -- | Determine the type for the given term, taking into account the
 -- given environment.
-typ3 :: (ReadTerm t, Monad m) => Environment -> t -> m Type
-typ3 _ rt = do
+principalType :: (ReadTerm t, Monad m) => Environment -> t -> m Type
+principalType _ rt = do
   t <- toTerm rt
   return . snd $ runFresh (mkContext t M.empty >>= go t)
     where

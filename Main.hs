@@ -9,7 +9,7 @@ import System.Console.Haskeline ( InputT, runInputT
                                 , Settings(..), defaultSettings
                                 , getInputLine )
 import Language.Landler ( Term, Var
-                        , run, breakDance, typ3
+                        , run, breakDance, principalType
                         , Statement(..), parseStatement
                         , Error(..), ParseError(..) )
 import System.Environment ( getArgs )
@@ -64,7 +64,7 @@ runInterpreter = printBanner >> runInputT settings (loop [])
                                             \implemented" >>
                               return env
                 TypeS t -> io (CE.handle (\(e :: Error) -> print e) $
-                               print . fromJust $ typ3 env t) >>
+                               print . fromJust $ principalType env t) >>
                            return env
 
       reportError :: ParseError -> Int -> IO ()
