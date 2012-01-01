@@ -1,7 +1,7 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, TypeSynonymInstances #-}
 
 module Language.Landler.Parser (
-        Module(..), Statement(..), Term(..), Var, ParseError(..),
+        ReadTerm(..), ParseError(..),
         parseModule, parseProgram, parseStatement, parseTerm
     ) where
 
@@ -10,6 +10,7 @@ import qualified Control.Exception as CE
 import Control.Monad.Error.Class ( MonadError(..), Error(..) )
 import Data.Functor.Identity ( Identity )
 import Data.Typeable ( Typeable )
+import Language.Landler.Types ( Module(..), Statement(..), Term(..) )
 import System.FilePath ( takeFileName )
 import Text.Interpol ( (^-^) )
 import Text.Parsec ( ParsecT, parse, oneOf, many, many1, manyTill, (<|>), eof
@@ -24,49 +25,6 @@ import Text.Parsec.Token ( GenLanguageDef(..), LanguageDef
 ----------------------------------------------------------------------
 -- Types
 ----------------------------------------------------------------------
-
--- | Lambda-calculus variable names follow the same rules as Haskell
--- identifiers.  Basically, the first character must be a letter or
--- @_@ and subesequent characters may be letters, numbers and @_@.
-type Var = String
-
--- | Statements are one of:
---
---   [@let <var> = (<term>)@] binds the term to the variable name;
---
---   [@(<term>)@] evaluates the term and prints out the result;
---
---   [@import <module>@] brings all lets in the given module into
---   scope and evaluates any free terms in order; or
---
---   [@type (<term>)@] prints the derivied type for the term.
---
---  These are meta-syntactic constructs; they are not part of the
---  lambda-calculus.
-data Statement = LetS Var Term | CallS Term | ImportS String | TypeS Term
-                 deriving ( Eq )
-
-instance Show Statement where
-    show (LetS v t)   = "let " ^-^ v ^-^ " = (" ^-^ t ^-^ ")"
-    show (CallS t)    = "(" ^-^ t ^-^ ")"
-    show (ImportS mn) = "import " ^-^ mn
-    show (TypeS t)    = "type " ^-^ t
-
--- | Lambda-calculus terms are variables, abstractions or
--- applications.
-data Term = Var Var | Ab Var Term | App Term Term
-            deriving ( Eq )
-
-instance Show Term where
-    show (Var v)   = v
-    show (Ab v t)  = "\\" ^-^ v ^-^ showAb t
-        where
-          showAb (Ab v' t') = " " ^-^ v' ^-^ showAb t'
-          showAb t'         = ". " ^-^ t'
-    show (App t p) = showP t ^-^ " " ^-^ showP p
-        where
-          showP (Var x) = x
-          showP q       = "(" ^-^ q ^-^ ")"
 
 -- | Represents a landler parser error (duh).  It is a thin wrapper
 -- around Parsec's @ParseError@.  This exists because we do not want
@@ -87,14 +45,17 @@ instance Show ParseError where
             msg' = unlines $ map ("    " ^-^) msgs
         in "" ^-^ line ^-^ ":" ^-^ col ^-^ ":\n" ^-^ msg'
 
--- | A 'Module' encapsulates the lambda-data found in a file.
-data Module = Module { getModuleName :: String
-                     , getModulePath :: FilePath
-                     , getModuleImports :: [String]
-                     , getModuleLets :: [(Var, Term)]
-                     , getModuleCalls :: [Term]
-                     , getModuleTypes :: [Term]
-                     } deriving ( Show )
+-- | Type-class for things that can be turned into 'Term's.
+class ReadTerm t where
+    toTerm :: (Monad m) => t -> m Term
+
+instance ReadTerm Term where
+    toTerm = return
+
+instance ReadTerm String where
+    toTerm str = case parseTerm str of
+                   Left err -> fail ("error " ^-^ err)
+                   Right t  -> return t
 
 ----------------------------------------------------------------------
 -- Parser

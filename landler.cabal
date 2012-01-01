@@ -35,4 +35,5 @@ Library
                          containers, transformers, mtl, filepath
   Ghc-options:           -Wall
   Exposed-modules:       Language.Landler
-  Other-modules:         Language.Landler.Parser
+  Other-modules:         Language.Landler.Parser, Language.Landler.Typer,
+                         Language.Landler.Types

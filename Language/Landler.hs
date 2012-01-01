@@ -1,6 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, DeriveDataTypeable,
-             FlexibleInstances, MultiParamTypeClasses #-}
-
 module Language.Landler (
         -- * Types
         Statement(..), Type(..), Environment, Result(..), Step, Term(..), Var,
@@ -22,85 +19,19 @@ module Language.Landler (
         subst, freeVariables, boundVariables
     ) where
 
-import qualified Control.Exception as CE
 import Control.Monad ( when )
-import Control.Monad.State ( MonadState(..), State, evalState )
-import Data.Maybe ( fromJust )
-import Data.Typeable ( Typeable )
 import qualified Data.Set as S
-import qualified Data.Map as M
-import Language.Landler.Parser
+import Language.Landler.Parser ( parseProgram, parseStatement, parseModule
+                               , ReadTerm(..), parseTerm
+                               , ParseError(..) )
+import Language.Landler.Typer ( principalType )
+import Language.Landler.Types ( Module(..), Statement(..)
+                              , Var, allVars
+                              , Result(..), Step, Error(..)
+                              , Environment, Term(..), Type(..)
+                              , canonicalForm )
 import System.FilePath ( replaceBaseName )
 import Text.Interpol ( (^-^) )
-
--- | Type-class for things that can be turned into 'Term's.
-class ReadTerm t where
-    toTerm :: (Monad m) => t -> m Term
-
-instance ReadTerm Term where
-    toTerm = return
-
-instance ReadTerm String where
-    toTerm str = case parseTerm str of
-                   Left err -> fail ("error " ^-^ err)
-                   Right t  -> return t
-
--- | An 'Environment' maps names to the terms they represent.
-type Environment = [(Var, Term)]
-
--- | The result of executing a 'Statement'.
-data Result = CallR [Step]
-            | TypeR Type
-
-instance Show Result where
-    show (CallR steps) = unlines $ go steps
-        where
-          go []            = ["---"]
-          go ((t, s) : ts) = (show t) : ("\t" ^-^ s) : go ts
-    show (TypeR typ) = show typ
-
--- | A 'Step' is a term and a description of the reduction (if any)
--- that can be applied to it.
-type Step = (Term, String)
-
-data Type = TypeVar Var
-          | TypeArr Type Type
-            deriving ( Eq )
-
-instance Show Type where
-    show = go . canonicalForm
-        where
-          go (TypeVar v) = v
-          go (TypeArr (TypeVar v) t) = v ^-^ " → " ^-^ go t
-          go (TypeArr t1 t2) = "(" ^-^ go t1 ^-^ ") → " ^-^ go t2
-
-type Context = M.Map Var Type
-
--- | A 'Substitution' is a function that transforms one type into
--- another.
-type Substitution = Type -> Type
-
--- | The kinds of errors landler throws.  Also have a look at
--- 'ParseError'.
-data Error = TypeError String
-             deriving ( Show, Typeable )
-
-instance CE.Exception Error
-
--- | A monad for fresh variables.  See 'fresh'.
-type Fresh = State [Var]
-
--- | Get a fresh variable name.  This variable name is guaranteed to
--- be new.
-fresh :: Fresh Var
-fresh = do
-  (v:vs) <- get
-  put vs
-  return v
-
--- | Run the 'Fresh' monad.
-runFresh :: Fresh a -> a
-runFresh f = evalState f allVars
 
 -- | Run the LC program in the given file and return the bound names
 -- and the sequences of steps that in the evaluations of the calls
@@ -113,81 +44,6 @@ run fn = do
   callResults <- mapM (breakDance lets) calls
   typeResults <- mapM (principalType lets) types
   return (lets, map CallR callResults ++ map TypeR typeResults)
-
--- | Determine the type for the given term, taking into account the
--- given environment.
-principalType :: (ReadTerm t, Monad m) => Environment -> t -> m Type
-principalType _ rt = do
-  t <- toTerm rt
-  return . snd $ runFresh (mkContext t M.empty >>= go t)
-    where
-      mkContext :: Term -> Context -> Fresh Context
-      mkContext (Var v) cxt = case M.lookup v cxt of
-                                    Nothing -> do
-                                      t <- fresh
-                                      return $ M.insert v (TypeVar t) cxt
-                                    Just _  -> return cxt
-      mkContext (App t1 t2) cxt = mkContext t1 cxt >>= mkContext t2
-      mkContext (Ab _ t) cxt = mkContext t cxt
-
-      go :: Term -> Context -> Fresh (Substitution, Type)
-      go (Var v) cxt   = return (id, fromJust $ M.lookup v cxt)
-      go (Ab v t) cxt  = do
-              t1 <- fresh
-              (s, t2) <- go t (M.insert v (TypeVar t1) cxt)
-              return (s, s (TypeArr (TypeVar t1) t2))
-      go (App m n) cxt = do
-              t1 <- fresh
-              (s3, t3) <- go m cxt
-              (s2, t2) <- go n (contextSubstitution s3 cxt)
-              let s1 = unifyTypes (s2 t3) (TypeArr t2 (TypeVar t1))
-              return (s1 . s2 . s3, s1 (TypeVar t1))
-
-      -- | Robinson's unification algorithm:
-      unifyTypes :: Type -> Type -> Substitution
-      unifyTypes t1@(TypeVar v1) t2
-            | t1 == t2  = id
-            | otherwise = occursCheck t1 t2 $ replaceType v1 t2
-      unifyTypes t1 t2@(TypeVar _) = unifyTypes t2 t1
-      unifyTypes (TypeArr a b) (TypeArr c d) =
-          let s1 = unifyTypes a c
-              s2 = unifyTypes (s1 b) (s1 d)
-          in s2 . s1
-
-      contextSubstitution :: Substitution -> Context -> Context
-      contextSubstitution s = M.map s
-
-      occursCheck :: Type -> Type -> a -> a
-      occursCheck t1 (TypeArr t2 t3) x = occursCheck t1 t2 $
-                                         occursCheck t1 t3 $ x
-      occursCheck t1 t2 x
-            | t1 == t2  = CE.throw (occursCheckFailed t1 t2)
-            | otherwise = x
-
-
-      replaceType :: Var -> Type -> Type -> Type
-      replaceType v1 t2 t3@(TypeVar v) = if v == v1 then t2 else t3
-      replaceType v1 t2 (TypeArr t3 t4) = TypeArr (replaceType v1 t2 t3)
-                                                  (replaceType v1 t2 t4)
-
-      occursCheckFailed t1 t2 = TypeError $ "Occurs check failed:\n\t" ^-^
-                                            t1 ^-^ "\nin\n\t" ^-^ t2
-
--- | Rename the 'TypeVar's in a 'Type' to a more *humane* order.  For
--- instance, turn @B -> C -> A@ into @A -> B -> C@.
-canonicalForm :: Type -> Type
-canonicalForm t = let (cf, _, _) = go allVars M.empty t
-                  in cf
-    where
-      go (v:vs) rcxt (TypeVar v1) =
-          case M.lookup v1 rcxt of
-            Nothing -> (TypeVar v, M.insert v1 v rcxt, vs)
-            Just v2 -> (TypeVar v2, rcxt, v:vs)
-      go vs rcxt (TypeArr t1 t2) =
-          let (t1', rcxt', vs') = go vs rcxt t1
-              (t2', rcxt'', vs'') = go vs' rcxt' t2
-          in (TypeArr t1' t2', rcxt'', vs'')
-      go _ _ _ = error "cannot happen"
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
@@ -272,11 +128,6 @@ boundVariables :: Term -> S.Set Var
 boundVariables (Var _)     = S.empty
 boundVariables (App m1 m2) = boundVariables m1 `S.union` boundVariables m2
 boundVariables (Ab y m)    = y `S.insert` boundVariables m
-
--- | A lot of variable names.
-allVars :: [Var]
-allVars = let vs = "" : [v ++ [s] | v <- vs, s <- ['a'..'z']]
-          in tail vs
 
 -- | Return a variable name not found in the given set.
 newVar :: S.Set Var -> Var
