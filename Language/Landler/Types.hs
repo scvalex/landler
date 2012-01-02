@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, TypeSynonymInstances #-}
 
 module Language.Landler.Types (
         -- * Statements and terms
@@ -14,10 +14,11 @@ module Language.Landler.Types (
         Error(..),
 
         -- * Helper functions
-        allVars, canonicalForm, getDerivationType
+        allVars, canonicalForm, getDerivationType, showCxt
     ) where
 
 import qualified Control.Exception as CE
+import Data.List ( intercalate )
 import qualified Data.Map as M
 import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
@@ -114,7 +115,17 @@ type Context = M.Map Var Type
 data Derivation = Ax Context Term Type
                 | ArrowI Context Term Type Derivation
                 | ArrowE Context Term Type Derivation Derivation
-                  deriving ( Show )
+
+instance Show Derivation where
+    show (Ax cxt term typ) = "(Ax) " ^-^ (showCxt cxt) ^-^
+                             " ⊢ " ^-^ term ^-^ " : " ^-^ typ
+    show (ArrowI cxt term typ deriv) = "(→ I) " ^-^ (showCxt cxt) ^-^
+                                       " ⊢ " ^-^ term ^-^ " : " ^-^ typ ^-^
+                                       "\n" ^-^ deriv
+    show (ArrowE cxt term typ deriv1 deriv2) =
+        "(→ E) " ^-^ (showCxt cxt) ^-^
+        " ⊢ " ^-^ term ^-^ " : " ^-^ typ ^-^
+        "\n" ^-^ deriv1 ^-^ "\n" ^-^ deriv2
 
 data Type = TypeVar Var
           | TypeArr Type Type
@@ -178,3 +189,7 @@ getDerivationType :: Derivation -> Type
 getDerivationType (Ax     _ _ t)     = t
 getDerivationType (ArrowI _ _ t _)   = t
 getDerivationType (ArrowE _ _ t _ _) = t
+
+showCxt :: Context -> String
+showCxt = intercalate ", " .
+          M.foldrWithKey (\v t acc -> (v ^-^ " : " ^-^ t) : acc) []
