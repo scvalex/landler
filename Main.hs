@@ -7,6 +7,8 @@ import Control.Monad.IO.Class ( MonadIO(..) )
 import System.Console.Haskeline ( InputT, runInputT
                                 , Settings(..), defaultSettings
                                 , getInputLine )
+import System.Directory ( getHomeDirectory )
+import System.FilePath ( (</>) )
 import Language.Landler ( Term, Var
                         , run, breakDance, principalType, typeDerivation
                         , Statement(..), parseStatement
@@ -29,13 +31,15 @@ main = do
         error "FIXME Use cmdargs or something."
 
 runInterpreter :: IO ()
-runInterpreter = printBanner >> runInputT settings (loop [])
+runInterpreter = do
+  homeDir <- getHomeDirectory
+  let settings = defaultSettings {
+                   historyFile = Just (homeDir </> ".landler_history") }
+  printBanner >> runInputT settings (loop [])
     where
       printBanner = putStrLn "landler, version <VERSION>: \
                              \https://github.com/scvalex/landler  \
                              \:? for help"
-
-      settings = defaultSettings { historyFile = Just "~/.landler_history" }
 
       loop :: Environment -> InputT IO ()
       loop env = do

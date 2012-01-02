@@ -32,7 +32,7 @@ Executable landler
 
 Library
   Build-depends:         base >= 4 && <5, interpol >= 0.2, parsec >= 3,
-                         containers, transformers, mtl, filepath
+                         containers, transformers, mtl, filepath, directory
   Ghc-options:           -Wall
   Exposed-modules:       Language.Landler
   Other-modules:         Language.Landler.Parser, Language.Landler.Typer,
