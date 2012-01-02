@@ -1,11 +1,19 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Language.Landler.Types (
-        Module(..), Statement(..), Term(..), Var,
+        -- * Statements and terms
+        Environment, Statement(..), Var, Term(..), Module(..),
 
-        Environment, Result(..), Step, Error(..),
+        -- * Evalutaion results
+        Result(..), Step,
+
+        -- * Types and derivations
         Derivation(..), Context, Type(..),
 
+        -- * Errors and exceptions
+        Error(..),
+
+        -- * Helper functions
         allVars, canonicalForm, getDerivationType
     ) where
 
@@ -14,10 +22,12 @@ import qualified Data.Map as M
 import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
 
--- | Lambda-calculus variable names follow the same rules as Haskell
--- identifiers.  Basically, the first character must be a letter or
--- @_@ and subesequent characters may be letters, numbers and @_@.
-type Var = String
+----------------------------------------------------------------------
+-- Statements and terms
+----------------------------------------------------------------------
+
+-- | An 'Environment' maps names to the terms they represent.
+type Environment = [(Var, Term)]
 
 -- | Statements are one of:
 --
@@ -42,6 +52,11 @@ instance Show Statement where
     show (ImportS mn) = "import " ^-^ mn
     show (TypeS t)    = "type " ^-^ t
     show (DeriveS t)  = "derive " ^-^ t
+
+-- | Lambda-calculus variable names follow the same rules as Haskell
+-- identifiers.  Basically, the first character must be a letter or
+-- @_@ and subesequent characters may be letters, numbers and @_@.
+type Var = String
 
 -- | Lambda-calculus terms are variables, abstractions or
 -- applications.
@@ -69,8 +84,9 @@ data Module = Module { getModuleName :: String
                      , getModuleDerives :: [Term]
                      } deriving ( Show )
 
--- | An 'Environment' maps names to the terms they represent.
-type Environment = [(Var, Term)]
+----------------------------------------------------------------------
+-- Evaluation results
+----------------------------------------------------------------------
 
 -- | The result of executing a 'Statement'.
 data Result = CallR [Step]
