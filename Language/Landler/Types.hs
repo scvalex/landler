@@ -121,13 +121,24 @@ instance Show Derivation where
                      lvls = levels (design tree)
                      offset = 0 - findMin lvls
                      lins = layout offset lvls
-                 in unlines $ reverse lins
+                 in intercalate "\n" $ reverse lins
         where
           mkTree :: Derivation -> Tree String
-          mkTree d@(Ax _ _ _) = Tree (title d) []
-          mkTree d@(ArrowI _ _ _ d1) = Tree (title d) [mkTree d1]
-          mkTree d@(ArrowE _ _ _ d1 d2) = Tree (title d)
-                                               [mkTree d1, mkTree d2]
+          mkTree d@(Ax _ _ _) =
+              let t = title d
+                  aux = Tree (dashRule d (length t)) []
+              in Tree t [aux]
+          mkTree d@(ArrowI _ _ _ d1) =
+              let t = title d
+                  len = max (length $ title d1) (length t)
+                  aux = Tree (dashRule d len) [mkTree d1]
+              in Tree t [aux]
+          mkTree d@(ArrowE _ _ _ d1 d2) =
+              let t = title d
+                  len = max (length (title d1) + length (title d2) + 4)
+                            (length t)
+                  aux = Tree (dashRule d len) [mkTree d1, mkTree d2]
+              in Tree t [aux]
 
           levels :: Tree (String, Int) -> [[(String, Int)]]
           levels (Tree (t, i) sts) =
@@ -155,15 +166,21 @@ instance Show Derivation where
           concat2 xss [] = xss
           concat2 (xs:xss) (ys:yss) = (xs ++ ys) : concat2 xss yss
 
+          dashRule d len = let r = rule d
+                           in concat [ replicate (length r) ' '
+                                     , replicate len '-'
+                                     , r ]
+
+          rule (Ax _ _ _) = "(Ax)"
+          rule (ArrowI _ _ _ _) = "(→ I)"
+          rule (ArrowE _ _ _ _ _) = "(→ E)"
+
           title (Ax cxt term typ) =
-              "(Ax) " ^-^ (showCxt cxt) ^-^
-              " ⊢  " ^-^ term ^-^ " : " ^-^ typ
+              (showCxt cxt) ^-^ " ⊢  " ^-^ term ^-^ " : " ^-^ typ
           title (ArrowI cxt term typ _) =
-              "(→ I) " ^-^ (showCxt cxt) ^-^
-              " ⊢ " ^-^ term ^-^ " : " ^-^ typ
+               (showCxt cxt) ^-^ " ⊢ " ^-^ term ^-^ " : " ^-^ typ
           title (ArrowE cxt term typ _ _) =
-              "(→ E) " ^-^ (showCxt cxt) ^-^
-              " ⊢ " ^-^ term ^-^ " : " ^-^ typ
+              (showCxt cxt) ^-^ " ⊢ " ^-^ term ^-^ " : " ^-^ typ
 
 data Type = TypeVar Var
           | TypeArr Type Type
@@ -291,6 +308,7 @@ design = fst . go
               positions = fitList extents
               ptrees = zipWith moveTree trees positions
               pextents = zipWith moveExtent extents positions
-              resultExtent = (0, length cargo) : mergeList pextents
-              resultTree = Tree (cargo, 0) ptrees
+              lc = (length cargo + 1) `div` 2
+              resultExtent = (-lc, lc) : mergeList pextents
+              resultTree = Tree (cargo, -lc) ptrees
           in (resultTree, resultExtent)
