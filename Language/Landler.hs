@@ -12,7 +12,7 @@ module Language.Landler (
         run, breakDance, dance, sideStep, step,
 
         -- * Typing
-        principalType, canonicalForm,
+        principalType, principalType', canonicalForm,
 
         -- * Utilities
         subst, freeVariables, boundVariables
@@ -22,7 +22,7 @@ import Control.Monad ( when )
 import qualified Data.Set as S
 import Language.Landler.Parser ( parseStatement, parseModule
                                , ReadTerm(..), parseTerm )
-import Language.Landler.Typer ( principalType )
+import Language.Landler.Typer ( principalType, principalType' )
 import Language.Landler.Types ( Module(..), Statement(..)
                               , Var, allVars
                               , Result(..), Step, Error(..)
@@ -36,12 +36,16 @@ import Text.Interpol ( (^-^) )
 -- read.
 run :: FilePath -> IO (Environment, [Result])
 run fn = do
-  Module { getModuleCalls = calls
-         , getModuleLets  = lets
-         , getModuleTypes = types } <- parseModuleResolveImports [] fn
+  Module { getModuleCalls   = calls
+         , getModuleLets    = lets
+         , getModuleTypes   = types
+         , getModuleDerives = derives } <- parseModuleResolveImports [] fn
   let callResults = map (breakDance lets) calls
       typeResults = map (principalType lets) types
-  return (lets, map CallR callResults ++ map TypeR typeResults)
+      deriveResults = map (principalType' lets) derives
+  return (lets, concat [ map CallR callResults
+                       , map TypeR typeResults
+                       , map DeriveR deriveResults ])
 
 -- | Perform a many-step reduction by 'sideStep' repeatedly.  Return
 -- all intermediary results (including the original term).  This is
@@ -157,3 +161,4 @@ parseModuleResolveImports fns fn = do
           mt { getModuleLets  = getModuleLets m1 ++ getModuleLets mt
              , getModuleCalls = getModuleCalls m1 ++ getModuleCalls mt
              , getModuleTypes = getModuleTypes m1 ++ getModuleTypes mt }
+

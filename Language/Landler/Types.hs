@@ -3,9 +3,10 @@
 module Language.Landler.Types (
         Module(..), Statement(..), Term(..), Var,
 
-        Environment, Result(..), Step, Type(..), Error(..),
+        Environment, Result(..), Step, Error(..),
+        Derivation(..), Context, Type(..),
 
-        allVars, canonicalForm
+        allVars, canonicalForm, getDerivationType
     ) where
 
 import qualified Control.Exception as CE
@@ -32,6 +33,7 @@ type Var = String
 --  These are meta-syntactic constructs; they are not part of the
 --  lambda-calculus.
 data Statement = LetS Var Term | CallS Term | ImportS String | TypeS Term
+               | DeriveS Term
                  deriving ( Eq )
 
 instance Show Statement where
@@ -39,6 +41,7 @@ instance Show Statement where
     show (CallS t)    = "(" ^-^ t ^-^ ")"
     show (ImportS mn) = "import " ^-^ mn
     show (TypeS t)    = "type " ^-^ t
+    show (DeriveS t)  = "derive " ^-^ t
 
 -- | Lambda-calculus terms are variables, abstractions or
 -- applications.
@@ -63,6 +66,7 @@ data Module = Module { getModuleName :: String
                      , getModuleLets :: [(Var, Term)]
                      , getModuleCalls :: [Term]
                      , getModuleTypes :: [Term]
+                     , getModuleDerives :: [Term]
                      } deriving ( Show )
 
 -- | An 'Environment' maps names to the terms they represent.
@@ -71,6 +75,7 @@ type Environment = [(Var, Term)]
 -- | The result of executing a 'Statement'.
 data Result = CallR [Step]
             | TypeR Type
+            | DeriveR Derivation
 
 instance Show Result where
     show (CallR steps) = unlines $ go steps
@@ -78,10 +83,22 @@ instance Show Result where
           go []            = ["---"]
           go ((t, s) : ts) = (show t) : ("\t" ^-^ s) : go ts
     show (TypeR typ) = show typ
+    show (DeriveR derivation) = show derivation
 
 -- | A 'Step' is a term and a description of the reduction (if any)
 -- that can be applied to it.
 type Step = (Term, String)
+
+----------------------------------------------------------------------
+-- Types and derivations
+----------------------------------------------------------------------
+
+type Context = M.Map Var Type
+
+data Derivation = Ax Context Term Type
+                | ArrowI Context Term Type Derivation
+                | ArrowE Context Term Type Derivation Derivation
+                  deriving ( Show )
 
 data Type = TypeVar Var
           | TypeArr Type Type
@@ -93,6 +110,10 @@ instance Show Type where
           go (TypeVar v) = v
           go (TypeArr (TypeVar v) t) = v ^-^ " → " ^-^ go t
           go (TypeArr t1 t2) = "(" ^-^ go t1 ^-^ ") → " ^-^ go t2
+
+----------------------------------------------------------------------
+-- Errors and exceptions
+----------------------------------------------------------------------
 
 -- | The kinds of errors landler throws.
 data Error = TypeError String
@@ -110,6 +131,9 @@ instance Show Error where
             msg' = unlines $ map ("    " ^-^) msgs
         in "" ^-^ line ^-^ ":" ^-^ col ^-^ ":\n" ^-^ msg'
 
+----------------------------------------------------------------------
+-- Helper functions
+----------------------------------------------------------------------
 
 -- | Rename the 'TypeVar's in a 'Type' to a more *humane* order.  For
 -- instance, turn @B -> C -> A@ into @A -> B -> C@.
@@ -131,3 +155,10 @@ canonicalForm t = let (cf, _, _) = go allVars M.empty t
 allVars :: [Var]
 allVars = let vs = "" : [v ++ [s] | v <- vs, s <- ['a'..'z']]
           in tail vs
+
+-- | Get the final type of a derivation (i.e. the type in the root of
+-- the tree).
+getDerivationType :: Derivation -> Type
+getDerivationType (Ax     _ _ t)     = t
+getDerivationType (ArrowI _ _ t _)   = t
+getDerivationType (ArrowE _ _ t _ _) = t

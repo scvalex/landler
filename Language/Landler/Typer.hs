@@ -1,5 +1,5 @@
 module Language.Landler.Typer (
-        principalType
+        principalType, principalType'
     ) where
 
 import qualified Control.Exception as CE
@@ -9,14 +9,13 @@ import Data.Maybe ( fromJust )
 import Language.Landler.Parser ( ReadTerm(..) )
 import Language.Landler.Types ( Var, allVars
                               , Environment, Type(..), Term(..)
+                              , Context, Derivation(..), getDerivationType
                               , Error(..) )
 import Text.Interpol ( (^-^) )
 
 ----------------------------------------------------------------------
 -- Types
 ----------------------------------------------------------------------
-
-type Context = M.Map Var Type
 
 -- | A 'Substitution' is a function that transforms one type into
 -- another.
@@ -29,7 +28,12 @@ type Substitution = Type -> Type
 -- | Determine the type for the given term, taking into account the
 -- given environment.
 principalType :: (ReadTerm t) => Environment -> t -> Type
-principalType _ rt = let t = toTerm rt
+principalType env = getDerivationType . principalType' env
+
+-- | Determine the derivation to type the given term, taking into
+-- account the givent environment.
+principalType' :: (ReadTerm t) => Environment -> t -> Derivation
+principalType' _ rt = let t = toTerm rt
                      in snd $ runFresh (mkContext t M.empty >>= go t)
     where
       mkContext :: Term -> Context -> Fresh Context
@@ -41,18 +45,23 @@ principalType _ rt = let t = toTerm rt
       mkContext (App t1 t2) cxt = mkContext t1 cxt >>= mkContext t2
       mkContext (Ab _ t) cxt = mkContext t cxt
 
-      go :: Term -> Context -> Fresh (Substitution, Type)
-      go (Var v) cxt   = return (id, fromJust $ M.lookup v cxt)
-      go (Ab v t) cxt  = do
+      go :: Term -> Context -> Fresh (Substitution, Derivation)
+      go term@(Var v) cxt =
+          return (id, Ax cxt term (fromJust $ M.lookup v cxt))
+      go term@(Ab v t) cxt  = do
               t1 <- fresh
-              (s, t2) <- go t (M.insert v (TypeVar t1) cxt)
-              return (s, s (TypeArr (TypeVar t1) t2))
-      go (App m n) cxt = do
+              (s, d2) <- go t (M.insert v (TypeVar t1) cxt)
+              return (s, ArrowI cxt term (s (TypeArr (TypeVar t1)
+                                                     (getDerivationType d2)))
+                                d2)
+      go term@(App m n) cxt = do
               t1 <- fresh
-              (s3, t3) <- go m cxt
-              (s2, t2) <- go n (contextSubstitution s3 cxt)
-              let s1 = unifyTypes (s2 t3) (TypeArr t2 (TypeVar t1))
-              return (s1 . s2 . s3, s1 (TypeVar t1))
+              (s3, d3) <- go m cxt
+              (s2, d2) <- go n (contextSubstitution s3 cxt)
+              let s1 = unifyTypes (s2 (getDerivationType d3))
+                                  (TypeArr (getDerivationType d2)
+                                           (TypeVar t1))
+              return (s1 . s2 . s3, ArrowE cxt term (s1 (TypeVar t1)) d2 d3)
 
       -- | Robinson's unification algorithm:
       unifyTypes :: Type -> Type -> Substitution

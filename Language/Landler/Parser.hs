@@ -62,12 +62,13 @@ program :: LParser [Statement]
 program = many1 statement <* eof
 
 statement :: LParser Statement
-statement = ws >> (letS <|> importS <|> callS <|> typeS)
+statement = ws >> (letS <|> importS <|> callS <|> typeS <|> deriveS)
     where
       letS = LetS <$> (llet *> lvar) <*> (leq *> lparens term)
       importS = ImportS <$> (limport *> lvar)
       callS = CallS <$> lparens term
       typeS = TypeS <$> (ltype *> lparens term)
+      deriveS = DeriveS <$> (lderive *> lparens term)
 
 term :: LParser Term
 term = do
@@ -109,7 +110,7 @@ lambdaCalculusDef = emptyDef { commentLine = ";"
                              , opStart = opLetter lambdaCalculusDef
                              , opLetter = oneOf ".\\="
                              , reservedOpNames = [ ".", "\\", "=", "let"
-                                                 , "import" ] }
+                                                 , "import", "type", "derive" ] }
 
 lexer :: GenTokenParser String u Identity
 lexer = makeTokenParser lambdaCalculusDef
@@ -120,12 +121,13 @@ lvar = identifier lexer
 lparens :: LParser a -> LParser a
 lparens = parens lexer
 
-ldot, llambda, llet, limport, ltype, leq, ws :: LParser ()
+ldot, llambda, llet, limport, ltype, lderive, leq, ws :: LParser ()
 ldot = (reservedOp lexer) "."
 llambda = (reservedOp lexer) "\\"
 llet = (reserved lexer) "let"
 limport = (reserved lexer) "import"
 ltype = (reserved lexer) "type"
+lderive = (reserved lexer) "derive"
 leq = (reservedOp lexer) "="
 ws = whiteSpace lexer
 
@@ -151,6 +153,7 @@ mkModule fp stmts =
                    , getModuleLets    = []
                    , getModuleCalls   = []
                    , getModuleTypes   = []
+                   , getModuleDerives = []
                    }
     in foldr (\s m' -> case s of
                          LetS v t ->
@@ -161,5 +164,7 @@ mkModule fp stmts =
                              m' { getModuleImports =
                                       mn : getModuleImports m' }
                          TypeS t ->
-                             m' { getModuleTypes = t : getModuleTypes m' })
+                             m' { getModuleTypes = t : getModuleTypes m' }
+                         DeriveS t ->
+                             m' { getModuleDerives = t : getModuleDerives m' })
              m stmts

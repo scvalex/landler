@@ -8,7 +8,7 @@ import System.Console.Haskeline ( InputT, runInputT
                                 , Settings(..), defaultSettings
                                 , getInputLine )
 import Language.Landler ( Term, Var
-                        , run, breakDance, principalType
+                        , run, breakDance, principalType, principalType'
                         , Statement(..), parseStatement
                         , Error(..) )
 import System.Environment ( getArgs )
@@ -62,6 +62,9 @@ runInterpreter = printBanner >> runInputT settings (loop [])
                           return env
             TypeS t    -> (CE.handle (\(e :: Error) -> print e) $
                              print (principalType env t)) >>
+                          return env
+            DeriveS t  -> (CE.handle (\(e :: Error) -> print e) $
+                             print (principalType' env t)) >>
                           return env
         return env'
 
