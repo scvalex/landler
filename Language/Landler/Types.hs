@@ -117,15 +117,53 @@ data Derivation = Ax Context Term Type
                 | ArrowE Context Term Type Derivation Derivation
 
 instance Show Derivation where
-    show (Ax cxt term typ) = "(Ax) " ^-^ (showCxt cxt) ^-^
-                             " ⊢ " ^-^ term ^-^ " : " ^-^ typ
-    show (ArrowI cxt term typ deriv) = "(→ I) " ^-^ (showCxt cxt) ^-^
-                                       " ⊢ " ^-^ term ^-^ " : " ^-^ typ ^-^
-                                       "\n" ^-^ deriv
-    show (ArrowE cxt term typ deriv1 deriv2) =
-        "(→ E) " ^-^ (showCxt cxt) ^-^
-        " ⊢ " ^-^ term ^-^ " : " ^-^ typ ^-^
-        "\n" ^-^ deriv1 ^-^ "\n" ^-^ deriv2
+    show deriv = let tree = mkTree deriv
+                     lvls = levels (design tree)
+                     offset = 0 - findMin lvls
+                     lins = layout offset lvls
+                 in unlines $ reverse lins
+        where
+          mkTree :: Derivation -> Tree String
+          mkTree d@(Ax _ _ _) = Tree (title d) []
+          mkTree d@(ArrowI _ _ _ d1) = Tree (title d) [mkTree d1]
+          mkTree d@(ArrowE _ _ _ d1 d2) = Tree (title d)
+                                               [mkTree d1, mkTree d2]
+
+          levels :: Tree (String, Int) -> [[(String, Int)]]
+          levels (Tree (t, i) sts) =
+              let lvls = map levels sts
+                  lvls' = deepConcat lvls
+              in [(t, i)] : lvls'
+
+          findMin :: [[(String, Int)]] -> Int
+          findMin = minimum . minimum . map (map (\(_, n) -> n))
+
+          layout :: Int -> [[(String, Int)]] -> [String]
+          layout offset = map (layoutLine offset "")
+
+          layoutLine :: Int -> String -> [(String, Int)] -> String
+          layoutLine _ acc [] = acc
+          layoutLine offset acc ((t, i):tis) =
+              let acc' = acc ++ replicate (offset + i - length acc) ' ' ++ t
+              in layoutLine offset acc' tis
+
+          deepConcat :: [[[a]]] -> [[a]]
+          deepConcat = foldl concat2 []
+
+          concat2 :: [[a]] -> [[a]] -> [[a]]
+          concat2 [] yss = yss
+          concat2 xss [] = xss
+          concat2 (xs:xss) (ys:yss) = (xs ++ ys) : concat2 xss yss
+
+          title (Ax cxt term typ) =
+              "(Ax) " ^-^ (showCxt cxt) ^-^
+              " ⊢  " ^-^ term ^-^ " : " ^-^ typ
+          title (ArrowI cxt term typ _) =
+              "(→ I) " ^-^ (showCxt cxt) ^-^
+              " ⊢ " ^-^ term ^-^ " : " ^-^ typ
+          title (ArrowE cxt term typ _ _) =
+              "(→ E) " ^-^ (showCxt cxt) ^-^
+              " ⊢ " ^-^ term ^-^ " : " ^-^ typ
 
 data Type = TypeVar Var
           | TypeArr Type Type
@@ -193,3 +231,66 @@ getDerivationType (ArrowE _ _ t _ _) = t
 showCxt :: Context -> String
 showCxt = intercalate ", " .
           M.foldrWithKey (\v t acc -> (v ^-^ " : " ^-^ t) : acc) []
+
+----------------------------------------------------------------------
+-- Tree layout helpers
+--
+-- Thank you: Andrew J. Kennedy
+--            Functional Pearls: Drawing Trees
+--            J. Functional Programming 6 (3): 527-534
+--            Cambridge University Press, May 1996
+----------------------------------------------------------------------
+
+data Tree a = Tree a [Tree a]
+              deriving ( Show )
+
+type Extent = [(Int, Int)]
+
+moveTree :: Tree (a, Int) -> Int -> Tree (a, Int)
+moveTree (Tree (cargo, pos) subtrees) disp = Tree (cargo, pos + disp) subtrees
+
+moveExtent :: Extent -> Int -> Extent
+moveExtent e disp = map (\(x, y) -> (x + disp, y + disp)) e
+
+merge :: Extent -> Extent -> Extent
+merge [] qs = qs
+merge ps [] = ps
+merge ((p, _) : ps) ((_, q) : qs) = (p, q) : merge ps qs
+
+mergeList :: [Extent] -> Extent
+mergeList = foldr merge []
+
+fit :: Extent -> Extent -> Int
+fit ((_, p) : ps) ((q, _) : qs) = max (fit ps qs) (p - q + 4)
+fit _             _             = 0
+
+fitList :: [Extent] -> [Int]
+fitList exts = zipWith mean (fitListL exts) (fitListR exts)
+    where
+      mean x y = (x + y + 1) `div` 2
+
+      fitListL :: [Extent] -> [Int]
+      fitListL = go []
+          where
+            go _ []       = []
+            go acc (e:es) = let x = fit acc e
+                            in x : go (merge acc (moveExtent e x)) es
+
+      fitListR :: [Extent] -> [Int]
+      fitListR = reverse . go [] . reverse
+          where
+            go _ []       = []
+            go acc (e:es) = let x = 0 - (fit e acc)
+                            in x : go (merge (moveExtent e x) acc) es
+
+design :: Tree String -> Tree (String, Int)
+design = fst . go
+    where
+      go (Tree cargo subtrees) =
+          let (trees, extents) = unzip $ map go subtrees
+              positions = fitList extents
+              ptrees = zipWith moveTree trees positions
+              pextents = zipWith moveExtent extents positions
+              resultExtent = (0, length cargo) : mergeList pextents
+              resultTree = Tree (cargo, 0) ptrees
+          in (resultTree, resultExtent)
