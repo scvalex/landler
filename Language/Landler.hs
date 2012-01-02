@@ -12,7 +12,7 @@ module Language.Landler (
         run, breakDance, dance, sideStep, step,
 
         -- * Typing
-        principalType, principalType', canonicalForm,
+        principalType, typeDerivation, canonicalForm,
 
         -- * Utilities
         subst, freeVariables, boundVariables
@@ -22,7 +22,7 @@ import Control.Monad ( when )
 import qualified Data.Set as S
 import Language.Landler.Parser ( parseStatement, parseModule
                                , ReadTerm(..), parseTerm )
-import Language.Landler.Typer ( principalType, principalType' )
+import Language.Landler.Typer ( principalType, typeDerivation )
 import Language.Landler.Types ( Module(..), Statement(..)
                               , Var, allVars
                               , Result(..), Step, Error(..)
@@ -42,7 +42,7 @@ run fn = do
          , getModuleDerives = derives } <- parseModuleResolveImports [] fn
   let callResults = map (breakDance lets) calls
       typeResults = map (principalType lets) types
-      deriveResults = map (principalType' lets) derives
+      deriveResults = map (typeDerivation lets) derives
   return (lets, concat [ map CallR callResults
                        , map TypeR typeResults
                        , map DeriveR deriveResults ])

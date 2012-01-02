@@ -1,5 +1,5 @@
 module Language.Landler.Typer (
-        principalType, principalType'
+        principalType, typeDerivation
     ) where
 
 import qualified Control.Exception as CE
@@ -28,12 +28,12 @@ type Substitution = Type -> Type
 -- | Determine the type for the given term, taking into account the
 -- given environment.
 principalType :: (ReadTerm t) => Environment -> t -> Type
-principalType env = getDerivationType . principalType' env
+principalType env = getDerivationType . typeDerivation env
 
 -- | Determine the derivation to type the given term, taking into
 -- account the givent environment.
-principalType' :: (ReadTerm t) => Environment -> t -> Derivation
-principalType' _ rt = let t = toTerm rt
+typeDerivation :: (ReadTerm t) => Environment -> t -> Derivation
+typeDerivation _ rt = let t = toTerm rt
                      in snd $ runFresh (mkContext t M.empty >>= go t)
     where
       mkContext :: Term -> Context -> Fresh Context
