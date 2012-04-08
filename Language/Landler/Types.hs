@@ -23,6 +23,8 @@ import qualified Data.Map as M
 import Data.Typeable ( Typeable )
 import Text.Interpol ( (^-^) )
 
+import Debug.Trace ( trace )
+
 ----------------------------------------------------------------------
 -- Statements and terms
 ----------------------------------------------------------------------
@@ -120,7 +122,7 @@ instance Show Derivation where
     show deriv = let tree = mkTree deriv
                      lvls = levels (design tree)
                      offset = 0 - findMin lvls
-                     lins = layout offset lvls
+                     lins = trace (unlines $ map show lvls) $ layout offset lvls
                  in intercalate "\n" $ reverse lins
         where
           mkTree :: Derivation -> Tree String

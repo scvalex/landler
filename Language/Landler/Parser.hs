@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, TypeSynonymInstances #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, FlexibleContexts,
+             TypeSynonymInstances #-}
 
 module Language.Landler.Parser (
         ReadTerm(..),
